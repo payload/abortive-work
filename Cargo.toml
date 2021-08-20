@@ -7,3 +7,4 @@ version = "0.1.0"
 
 [dependencies]
 bevy = {git = "https://github.com/bevyengine/bevy.git", commit = "62e4e59a864a3d2ca01e0372cb2f0ffed0d2dbf6"}
+fastrand = "*"

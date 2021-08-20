@@ -1,6 +1,20 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use std::f32::consts::TAU;
 
-pub struct Imp;
+use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
+
+pub struct Imp {
+    idle_time: f32,
+    walk_to: Vec3,
+}
+
+impl Imp {
+    pub fn new() -> Self {
+        Self {
+            idle_time: 0.0,
+            walk_to: Vec3::ZERO,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct ImpAssets {
@@ -13,7 +27,9 @@ pub struct ImpPlugin;
 
 impl Plugin for ImpPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
+            .add_system(update_imp.label("imp"))
+            .add_system(update_walk.after("imp"));
     }
 }
 
@@ -57,5 +73,32 @@ fn load_assets(
             base_color: color,
             ..Default::default()
         }
+    }
+}
+
+fn update_imp(time: Res<Time>, mut imps: Query<(Entity, &mut Imp, &Transform)>) {
+    let now = time.time_since_startup().as_secs_f32();
+
+    for (_entity, mut imp, transform) in imps.iter_mut() {
+        if imp.idle_time <= now {
+            imp.idle_time = now + 1.0;
+
+            let a = TAU * fastrand::f32();
+            let random_offset = vec3(a.cos(), 0.0, a.sin());
+            imp.walk_to = transform.translation + random_offset;
+        }
+    }
+}
+
+fn update_walk(time: Res<Time>, mut imps: Query<(&Imp, &mut Transform)>) {
+    let dt = time.delta_seconds();
+
+    for (imp, mut transform) in imps.iter_mut() {
+        let diff = imp.walk_to - transform.translation;
+        let len2 = diff.length_squared();
+        let vec = if len2 < 1.0 { diff } else { diff / len2 / len2 };
+        let speed = 3.0;
+        let step = vec * speed * dt;
+        transform.translation += step;
     }
 }
