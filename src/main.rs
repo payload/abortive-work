@@ -11,6 +11,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationsPlugin)
         .add_plugin(EntitiesPlugin)
+        .add_plugin(UserInputPlugin)
         .add_startup_system(spawn_level_1)
         .add_startup_system(spawn_camera)
         .run();
