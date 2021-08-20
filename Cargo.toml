@@ -1,0 +1,9 @@
+[package]
+edition = "2018"
+name = "game"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = {git = "https://github.com/bevyengine/bevy.git", commit = "62e4e59a864a3d2ca01e0372cb2f0ffed0d2dbf6"}
