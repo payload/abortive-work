@@ -33,7 +33,7 @@ fn main() {
     // counter for stuff in treasure, storage
 }
 
-fn spawn_level_1(mut boulder: BoulderSpawn, mut smithery: SmitherySpawn) {
+fn spawn_level_1(mut boulder: BoulderSpawn, mut smithery: SmitherySpawn, mut imp: ImpSpawn) {
     use BoulderMaterial::*;
 
     boulder.spawn(Boulder { material: Stone }, at(3, 3));
@@ -43,6 +43,8 @@ fn spawn_level_1(mut boulder: BoulderSpawn, mut smithery: SmitherySpawn) {
     boulder.spawn(Boulder { material: Iron }, at(1, 2));
 
     smithery.spawn(Smithery, at(-3, 2));
+
+    imp.spawn(Imp, at(0, 0));
 
     fn at(x: i32, z: i32) -> Transform {
         Transform::from_xyz(x as f32, 0.0, z as f32)
