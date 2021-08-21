@@ -2,6 +2,8 @@ use std::f32::consts::TAU;
 
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 
+use crate::systems::FunnyAnimation;
+
 use super::Boulder;
 
 pub struct Imp {
@@ -85,6 +87,7 @@ fn load_assets(
 
 fn update_imp(
     time: Res<Time>,
+    mut cmds: Commands,
     mut imps: Query<(Entity, &mut Imp, &Transform)>,
     boulders: Query<(Entity, &Transform, &Boulder)>,
 ) {
@@ -92,16 +95,22 @@ fn update_imp(
     let now = time.time_since_startup().as_secs_f32();
     let dt = time.delta_seconds();
 
-    for (_entity, mut imp, transform) in imps.iter_mut() {
+    for (entity, mut imp, transform) in imps.iter_mut() {
         match imp.behavior {
             Idle { time } => {
                 if time <= now {
-                    let _ = to_dig(now, &mut imp, &boulders) || to_idle(now, transform, &mut imp);
+                    let _ = to_dig(&mut imp, &boulders) || to_idle(now, transform, &mut imp);
                 }
             }
             Dig { boulder, time } => {
+                let mut imp_cmds = cmds.entity(entity);
+                let mut leave_state = || {
+                    imp_cmds.remove::<FunnyAnimation>();
+                };
+
                 if let Ok((_, boulder_transform, boulder_component)) = boulders.get(boulder) {
                     if !boulder_component.marked_for_digging {
+                        leave_state();
                         to_idle(now, transform, &mut imp);
                     } else if boulder_transform
                         .translation
@@ -111,13 +120,16 @@ fn update_imp(
                         let time = time + dt;
 
                         if time >= 1.5 {
+                            leave_state();
                             to_idle(now, transform, &mut imp);
                         } else {
                             imp.walk_to = transform.translation;
                             imp.behavior = Dig { boulder, time };
+                            imp_cmds.insert(FunnyAnimation { offset: 0.0 });
                         }
                     }
                 } else {
+                    leave_state();
                     to_idle(now, transform, &mut imp);
                 }
             }
@@ -132,7 +144,7 @@ fn update_imp(
         true
     }
 
-    fn to_dig(now: f32, imp: &mut Imp, boulders: &Query<(Entity, &Transform, &Boulder)>) -> bool {
+    fn to_dig(imp: &mut Imp, boulders: &Query<(Entity, &Transform, &Boulder)>) -> bool {
         if let Some((boulder, walk_to)) = diggable_boulder(boulders) {
             imp.behavior = Dig { boulder, time: 0.0 };
             imp.walk_to = walk_to;
