@@ -13,6 +13,8 @@ pub struct EntitiesPlugin;
 
 impl Plugin for EntitiesPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_plugin(BoulderPlugin).add_plugin(SmitheryPlugin).add_plugin(ImpPlugin);
+        app.add_plugin(BoulderPlugin)
+            .add_plugin(SmitheryPlugin)
+            .add_plugin(ImpPlugin);
     }
 }

@@ -1,5 +1,5 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::systems::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 pub struct Smithery;
 

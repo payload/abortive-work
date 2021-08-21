@@ -37,11 +37,11 @@ fn main() {
 fn spawn_level_1(mut boulder: BoulderSpawn, mut smithery: SmitherySpawn, mut imp: ImpSpawn) {
     use BoulderMaterial::*;
 
-    boulder.spawn(Boulder { material: Stone }, at(3, 3));
-    boulder.spawn(Boulder { material: Coal }, at(2, 3));
-    boulder.spawn(Boulder { material: Stone }, at(2, 2));
-    boulder.spawn(Boulder { material: Gold }, at(1, 3));
-    boulder.spawn(Boulder { material: Iron }, at(1, 2));
+    boulder.spawn(Boulder::new(Stone), at(3, 3));
+    boulder.spawn(Boulder::new(Coal), at(2, 3));
+    boulder.spawn(Boulder::new(Stone), at(2, 2));
+    boulder.spawn(Boulder::new(Gold), at(1, 3));
+    boulder.spawn(Boulder::new(Iron), at(1, 2));
 
     smithery.spawn(Smithery, at(-3, 2));
 
@@ -56,5 +56,6 @@ fn spawn_camera(mut cmds: Commands) {
     cmds.spawn_bundle(PerspectiveCameraBundle {
         transform: Transform::from_xyz(0.0, 10.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()
-    });
+    })
+    .insert_bundle(PickingCameraBundle::default());
 }

@@ -2,6 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 pub struct Boulder {
     pub material: BoulderMaterial,
+    pub marked_for_digging: bool,
 }
 
 pub enum BoulderMaterial {
@@ -9,6 +10,17 @@ pub enum BoulderMaterial {
     Coal,
     Iron,
     Gold,
+}
+
+pub struct BoulderModel;
+
+impl Boulder {
+    pub fn new(material: BoulderMaterial) -> Self {
+        Self {
+            material,
+            marked_for_digging: false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -37,23 +49,25 @@ pub struct BoulderSpawn<'w, 's> {
 
 impl<'w, 's> BoulderSpawn<'w, 's> {
     pub fn spawn(&mut self, boulder: Boulder, transform: Transform) {
-        let pbr_bundle = PbrBundle {
-            transform: self.assets.transform.clone(),
-            material: match boulder.material {
-                BoulderMaterial::Stone => self.assets.stone.clone(),
-                BoulderMaterial::Coal => self.assets.coal.clone(),
-                BoulderMaterial::Iron => self.assets.iron.clone(),
-                BoulderMaterial::Gold => self.assets.gold.clone(),
-            },
-            mesh: self.assets.mesh.clone(),
-            ..Default::default()
-        };
+        let model = self
+            .cmds
+            .spawn_bundle(PbrBundle {
+                transform: self.assets.transform.clone(),
+                material: match boulder.material {
+                    BoulderMaterial::Stone => self.assets.stone.clone(),
+                    BoulderMaterial::Coal => self.assets.coal.clone(),
+                    BoulderMaterial::Iron => self.assets.iron.clone(),
+                    BoulderMaterial::Gold => self.assets.gold.clone(),
+                },
+                mesh: self.assets.mesh.clone(),
+                ..Default::default()
+            })
+            .insert(BoulderModel)
+            .id();
 
         self.cmds
             .spawn_bundle((boulder, transform, GlobalTransform::identity()))
-            .with_children(|p| {
-                p.spawn_bundle(pbr_bundle);
-            });
+            .push_children(&[model]);
     }
 }
 
