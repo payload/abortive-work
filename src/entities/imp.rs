@@ -2,15 +2,22 @@ use std::f32::consts::TAU;
 
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 
+use super::Boulder;
+
 pub struct Imp {
-    idle_time: f32,
+    behavior: ImpBehavior,
     walk_to: Vec3,
+}
+
+enum ImpBehavior {
+    Idle { time: f32 },
+    Dig { boulder: Entity, time: f32 },
 }
 
 impl Imp {
     pub fn new() -> Self {
         Self {
-            idle_time: 0.0,
+            behavior: ImpBehavior::Idle { time: 0.0 },
             walk_to: Vec3::ZERO,
         }
     }
@@ -76,16 +83,79 @@ fn load_assets(
     }
 }
 
-fn update_imp(time: Res<Time>, mut imps: Query<(Entity, &mut Imp, &Transform)>) {
+fn update_imp(
+    time: Res<Time>,
+    mut imps: Query<(Entity, &mut Imp, &Transform)>,
+    boulders: Query<(Entity, &Transform, &Boulder)>,
+) {
+    use ImpBehavior::*;
     let now = time.time_since_startup().as_secs_f32();
+    let dt = time.delta_seconds();
 
     for (_entity, mut imp, transform) in imps.iter_mut() {
-        if imp.idle_time <= now {
-            imp.idle_time = now + 1.0;
+        match imp.behavior {
+            Idle { time } => {
+                if time <= now {
+                    let _ = to_dig(now, &mut imp, &boulders) || to_idle(now, transform, &mut imp);
+                }
+            }
+            Dig { boulder, time } => {
+                if let Ok((_, boulder_transform, boulder_component)) = boulders.get(boulder) {
+                    if !boulder_component.marked_for_digging {
+                        to_idle(now, transform, &mut imp);
+                    } else if boulder_transform
+                        .translation
+                        .distance_squared(transform.translation)
+                        < 1.0
+                    {
+                        let time = time + dt;
 
-            let a = TAU * fastrand::f32();
-            let random_offset = vec3(a.cos(), 0.0, a.sin());
-            imp.walk_to = transform.translation + random_offset;
+                        if time >= 1.5 {
+                            to_idle(now, transform, &mut imp);
+                        } else {
+                            imp.walk_to = transform.translation;
+                            imp.behavior = Dig { boulder, time };
+                        }
+                    }
+                } else {
+                    to_idle(now, transform, &mut imp);
+                }
+            }
+        }
+    }
+
+    fn to_idle(now: f32, transform: &Transform, imp: &mut Imp) -> bool {
+        let a = TAU * fastrand::f32();
+        let random_offset = vec3(a.cos(), 0.0, a.sin());
+        imp.walk_to = transform.translation + random_offset;
+        imp.behavior = Idle { time: now + 1.0 };
+        true
+    }
+
+    fn to_dig(now: f32, imp: &mut Imp, boulders: &Query<(Entity, &Transform, &Boulder)>) -> bool {
+        if let Some((boulder, walk_to)) = diggable_boulder(boulders) {
+            imp.behavior = Dig { boulder, time: 0.0 };
+            imp.walk_to = walk_to;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn diggable_boulder(query: &Query<(Entity, &Transform, &Boulder)>) -> Option<(Entity, Vec3)> {
+        let mut boulders: Vec<(Entity, Vec3)> = Vec::new();
+
+        for (entity, transform, boulder) in query.iter() {
+            if boulder.marked_for_digging {
+                boulders.push((entity, transform.translation));
+            }
+        }
+
+        if boulders.is_empty() {
+            None
+        } else {
+            let index = fastrand::usize(0..boulders.len());
+            Some(boulders[index])
         }
     }
 }
@@ -96,7 +166,7 @@ fn update_walk(time: Res<Time>, mut imps: Query<(&Imp, &mut Transform)>) {
     for (imp, mut transform) in imps.iter_mut() {
         let diff = imp.walk_to - transform.translation;
         let len2 = diff.length_squared();
-        let vec = if len2 < 1.0 { diff } else { diff / len2 / len2 };
+        let vec = if len2 < 1.0 { diff } else { diff / len2.sqrt() };
         let speed = 3.0;
         let step = vec * speed * dt;
         transform.translation += step;
