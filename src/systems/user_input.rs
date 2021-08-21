@@ -16,6 +16,7 @@ impl Plugin for UserInputPlugin {
         app.add_plugin(PickingPlugin)
             .add_plugin(InteractablePickingPlugin)
             .add_plugin(HighlightablePickingPlugin)
+            .add_startup_system_to_stage(StartupStage::PreStartup, load_ghost_assets)
             .add_system(exit_on_esc_system)
             .add_system(spawn_imp_on_key)
             .add_system(make_pickable)
@@ -60,24 +61,81 @@ fn click_boulder(
 }
 
 fn interact_ground(
+    mut cmds: Commands,
     camera: Query<&PickingCamera>,
-    models: Query<(&Parent, &Interaction), With<GroundModel>>,
+    models: Query<(Entity, &Parent, &Interaction), With<GroundModel>>,
     interaction_changed: Query<&Interaction, Changed<Interaction>>,
     mut storage: StorageSpawn,
+    assets: Res<StorageAssets>,
+    mut ghost: Query<(Entity, &mut Transform), With<Ghost>>,
+    ghost_assets: Res<GhostAssets>,
 ) {
     if let Ok(camera) = camera.single() {
-        if let Some((intersect_entity, intersection)) = camera.intersect_top() {
-            if let Ok((_parent, interaction)) = models.get(intersect_entity) {
-                let pos = Transform::from_translation(intersection.position());
-                let changed = interaction_changed.get(intersect_entity).is_ok();
+        for (ground_model_entity, _parent, interaction) in models.iter() {
+            let changed = interaction_changed.get(ground_model_entity).is_ok();
 
-                match interaction {
-                    Interaction::Clicked if changed => storage.spawn(Storage, pos),
-                    Interaction::Clicked => {}
-                    Interaction::Hovered => {}
-                    Interaction::None => {}
+            let round_pos = if let Some((_, intersection)) = camera.intersect_top() {
+                intersection.position().round()
+            } else {
+                Vec3::ZERO
+            };
+            let round_trans = Transform::from_translation(round_pos);
+
+            match interaction {
+                Interaction::Clicked if changed => {
+                    //
+                    // TODO interact with some building tool resource instead
+                    //
+                    storage.spawn(Storage, round_trans);
+                    if let Ok((ghost_entity, _ghost_transform)) = ghost.single_mut() {
+                        cmds.entity(ghost_entity).despawn_recursive();
+                    }
+                }
+                Interaction::Clicked => {}
+                Interaction::Hovered if changed => {
+                    if let Ok((_ghost_entity, mut ghost_transform)) = ghost.single_mut() {
+                        ghost_transform.translation = round_pos;
+                    } else {
+                        let model = cmds
+                            .spawn_bundle(PbrBundle {
+                                transform: assets.transform.clone(),
+                                mesh: assets.mesh.clone(),
+                                material: ghost_assets.material.clone(),
+                                ..Default::default()
+                            })
+                            .id();
+
+                        cmds.spawn_bundle((Ghost, round_trans, GlobalTransform::identity()))
+                            .push_children(&[model]);
+                    }
+                }
+                Interaction::Hovered => {
+                    if let Ok((_ghost_entity, mut ghost_transform)) = ghost.single_mut() {
+                        ghost_transform.translation = round_pos;
+                    }
+                }
+                Interaction::None => {
+                    if let Ok((ghost_entity, _ghost_transform)) = ghost.single_mut() {
+                        cmds.entity(ghost_entity).despawn_recursive();
+                    }
                 }
             }
         }
     }
+}
+
+struct Ghost;
+
+struct GhostAssets {
+    material: Handle<StandardMaterial>,
+}
+
+fn load_ghost_assets(mut cmds: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
+    cmds.insert_resource(GhostAssets {
+        material: materials.add(StandardMaterial {
+            unlit: true,
+            base_color: Color::rgba(1.0, 1.0, 1.0, 0.5),
+            ..Default::default()
+        }),
+    })
 }

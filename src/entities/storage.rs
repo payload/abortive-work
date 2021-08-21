@@ -45,9 +45,9 @@ impl<'w, 's> StorageSpawn<'w, 's> {
 
 #[derive(Clone)]
 pub struct StorageAssets {
-    transform: Transform,
-    material: Handle<StandardMaterial>,
-    mesh: Handle<Mesh>,
+    pub transform: Transform,
+    pub material: Handle<StandardMaterial>,
+    pub mesh: Handle<Mesh>,
 }
 
 fn load_assets(
