@@ -1,6 +1,8 @@
 use crate::systems::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
+use super::{Blocking, NotGround};
+
 pub struct Smithery;
 
 pub struct SmitheryPlugin;
@@ -28,6 +30,8 @@ impl<'w, 's> SmitherySpawn<'w, 's> {
                 mesh: self.assets.mesh.clone(),
                 ..Default::default()
             })
+            .insert(NotGround)
+            .insert(Blocking)
             .id();
 
         self.cmds

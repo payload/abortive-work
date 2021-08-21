@@ -12,6 +12,12 @@ pub use imp::*;
 mod storage;
 pub use storage::*;
 
+mod ground;
+pub use ground::*;
+
+pub struct NotGround;
+pub struct Blocking;
+
 pub struct EntitiesPlugin;
 
 impl Plugin for EntitiesPlugin {
@@ -19,6 +25,7 @@ impl Plugin for EntitiesPlugin {
         app.add_plugin(BoulderPlugin)
             .add_plugin(SmitheryPlugin)
             .add_plugin(ImpPlugin)
-            .add_plugin(StoragePlugin);
+            .add_plugin(StoragePlugin)
+            .add_plugin(GroundPlugin);
     }
 }

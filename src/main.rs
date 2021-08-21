@@ -35,12 +35,15 @@ fn main() {
 }
 
 fn spawn_level_1(
+    mut ground: GroundSpawn,
     mut boulder: BoulderSpawn,
     mut smithery: SmitherySpawn,
     mut imp: ImpSpawn,
     mut storage: StorageSpawn,
 ) {
     use BoulderMaterial::*;
+
+    ground.spawn(Ground, at(0, 0));
 
     boulder.spawn(Boulder::new(Stone), at(3, 3));
     boulder.spawn(Boulder::new(Coal), at(2, 3));

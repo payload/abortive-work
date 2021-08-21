@@ -1,5 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
+use super::{Blocking, NotGround};
+
 pub struct Boulder {
     pub material: BoulderMaterial,
     pub marked_for_digging: bool,
@@ -62,6 +64,8 @@ impl<'w, 's> BoulderSpawn<'w, 's> {
                 mesh: self.assets.mesh.clone(),
                 ..Default::default()
             })
+            .insert(NotGround)
+            .insert(Blocking)
             .insert(BoulderModel)
             .id();
 

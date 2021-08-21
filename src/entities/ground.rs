@@ -1,31 +1,25 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::NotGround;
+pub struct Ground;
 
-pub struct Storage;
+pub struct GroundModel;
 
-impl Storage {
-    pub fn new() -> Self {
-        Self
-    }
-}
+pub struct GroundPlugin;
 
-pub struct StoragePlugin;
-
-impl Plugin for StoragePlugin {
+impl Plugin for GroundPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets);
     }
 }
 
 #[derive(SystemParam)]
-pub struct StorageSpawn<'w, 's> {
+pub struct GroundSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
-    assets: Res<'w, StorageAssets>,
+    assets: Res<'w, GroundAssets>,
 }
 
-impl<'w, 's> StorageSpawn<'w, 's> {
-    pub fn spawn(&mut self, Storage: Storage, transform: Transform) {
+impl<'w, 's> GroundSpawn<'w, 's> {
+    pub fn spawn(&mut self, Ground: Ground, transform: Transform) {
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -34,17 +28,17 @@ impl<'w, 's> StorageSpawn<'w, 's> {
                 mesh: self.assets.mesh.clone(),
                 ..Default::default()
             })
-            .insert(NotGround)
+            .insert(GroundModel)
             .id();
 
         self.cmds
-            .spawn_bundle((Storage, transform, GlobalTransform::identity()))
+            .spawn_bundle((Ground, transform, GlobalTransform::identity()))
             .push_children(&[model]);
     }
 }
 
 #[derive(Clone)]
-pub struct StorageAssets {
+pub struct GroundAssets {
     transform: Transform,
     material: Handle<StandardMaterial>,
     mesh: Handle<Mesh>,
@@ -55,17 +49,17 @@ fn load_assets(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    cmds.insert_resource(StorageAssets {
+    cmds.insert_resource(GroundAssets {
         transform: Transform {
-            translation: Vec3::new(0.0, 0.002, 0.0),
+            translation: Vec3::new(0.0, 0.0, 0.0),
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
         },
         material: materials.add(StandardMaterial {
             unlit: true,
-            base_color: Color::GRAY,
+            base_color: Color::rgb(0.5, 0.4, 0.4),
             ..Default::default()
         }),
-        mesh: meshes.add(shape::Plane { size: 1.0 }.into()),
+        mesh: meshes.add(shape::Plane { size: 100.0 }.into()),
     });
 }
