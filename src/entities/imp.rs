@@ -4,7 +4,7 @@ use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 
 use crate::systems::FunnyAnimation;
 
-use super::Boulder;
+use super::{Boulder, Storage};
 
 pub struct Imp {
     behavior: ImpBehavior,
@@ -13,7 +13,10 @@ pub struct Imp {
 
 enum ImpBehavior {
     Idle { time: f32 },
+    WalkToDig { boulder: Entity },
     Dig { boulder: Entity, time: f32 },
+    WalkToStore { storage: Entity },
+    Store { storage: Entity, time: f32 },
 }
 
 impl Imp {
@@ -90,6 +93,7 @@ fn update_imp(
     mut cmds: Commands,
     mut imps: Query<(Entity, &mut Imp, &Transform)>,
     boulders: Query<(Entity, &Transform, &Boulder)>,
+    storages: Query<(Entity, &Transform, &Storage)>,
 ) {
     use ImpBehavior::*;
     let now = time.time_since_startup().as_secs_f32();
@@ -99,38 +103,91 @@ fn update_imp(
         match imp.behavior {
             Idle { time } => {
                 if time <= now {
-                    let _ = to_dig(&mut imp, &boulders) || to_idle(now, transform, &mut imp);
+                    let _ =
+                        to_walk_to_dig(&mut imp, &boulders) || to_idle(now, transform, &mut imp);
+                }
+            }
+            WalkToDig { boulder } => {
+                if let Ok((_, boulder_transform, boulder_component)) = boulders.get(boulder) {
+                    let digging = boulder_component.marked_for_digging;
+                    let is_far = || {
+                        boulder_transform
+                            .translation
+                            .distance_squared(transform.translation)
+                            > 1.0
+                    };
+
+                    if digging && is_far() {
+                        imp.walk_to = boulder_transform.translation;
+                    } else if digging {
+                        imp.walk_to = transform.translation;
+                        imp.behavior = Dig { boulder, time: 0.0 };
+                        cmds.entity(entity).insert(FunnyAnimation { offset: 0.0 });
+                    } else {
+                        to_idle(now, transform, &mut imp);
+                    }
+                } else {
+                    to_idle(now, transform, &mut imp);
                 }
             }
             Dig { boulder, time } => {
-                let mut imp_cmds = cmds.entity(entity);
                 let mut leave_state = || {
-                    imp_cmds.remove::<FunnyAnimation>();
+                    cmds.entity(entity).remove::<FunnyAnimation>();
                 };
 
                 if let Ok((_, boulder_transform, boulder_component)) = boulders.get(boulder) {
-                    if !boulder_component.marked_for_digging {
-                        leave_state();
-                        to_idle(now, transform, &mut imp);
-                    } else if boulder_transform
-                        .translation
-                        .distance_squared(transform.translation)
-                        < 1.0
-                    {
+                    let digging = boulder_component.marked_for_digging;
+                    let is_far = || {
+                        boulder_transform
+                            .translation
+                            .distance_squared(transform.translation)
+                            > 1.0
+                    };
+
+                    if digging && !is_far() {
                         let time = time + dt;
 
                         if time >= 1.5 {
                             leave_state();
-                            to_idle(now, transform, &mut imp);
+                            let _ = to_walk_to_store(&mut imp, &storages)
+                                || to_idle(now, transform, &mut imp);
                         } else {
-                            imp.walk_to = transform.translation;
                             imp.behavior = Dig { boulder, time };
-                            imp_cmds.insert(FunnyAnimation { offset: 0.0 });
                         }
+                    } else if !digging {
+                        leave_state();
+                        to_idle(now, transform, &mut imp);
                     }
                 } else {
                     leave_state();
                     to_idle(now, transform, &mut imp);
+                }
+            }
+            WalkToStore { storage } => {
+                if let Ok((_, t, _)) = storages.get(storage) {
+                    if t.translation.distance_squared(transform.translation) < 0.3 {
+                        imp.behavior = Store {
+                            storage,
+                            time: now + 0.8,
+                        };
+                    }
+                } else {
+                    let _ =
+                        to_walk_to_store(&mut imp, &storages) || to_idle(now, transform, &mut imp);
+                }
+            }
+            Store { storage, time } => {
+                if let Ok((_, t, _)) = storages.get(storage) {
+                    if t.translation.distance_squared(transform.translation) < 0.3 {
+                        if time <= now {
+                            to_idle(now, transform, &mut imp);
+                        }
+                    } else {
+                        imp.behavior = WalkToStore { storage };
+                    }
+                } else {
+                    let _ =
+                        to_walk_to_store(&mut imp, &storages) || to_idle(now, transform, &mut imp);
                 }
             }
         }
@@ -144,10 +201,23 @@ fn update_imp(
         true
     }
 
-    fn to_dig(imp: &mut Imp, boulders: &Query<(Entity, &Transform, &Boulder)>) -> bool {
-        if let Some((boulder, walk_to)) = diggable_boulder(boulders) {
-            imp.behavior = Dig { boulder, time: 0.0 };
-            imp.walk_to = walk_to;
+    fn to_walk_to_dig(imp: &mut Imp, boulders: &Query<(Entity, &Transform, &Boulder)>) -> bool {
+        if let Some((boulder, _walk_to)) = diggable_boulder(boulders) {
+            imp.behavior = WalkToDig { boulder };
+            true
+        } else {
+            false
+        }
+    }
+
+    fn to_walk_to_store(imp: &mut Imp, storages: &Query<(Entity, &Transform, &Storage)>) -> bool {
+        let vec: Vec<_> = storages.iter().collect();
+
+        if !vec.is_empty() {
+            let index = fastrand::usize(0..vec.len());
+            let (entity, t, _) = vec[index];
+            imp.behavior = WalkToStore { storage: entity };
+            imp.walk_to = t.translation;
             true
         } else {
             false
