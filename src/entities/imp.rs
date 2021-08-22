@@ -30,9 +30,9 @@ impl Imp {
 
 #[derive(Clone)]
 pub struct ImpAssets {
-    transform: Transform,
-    material: Handle<StandardMaterial>,
-    mesh: Handle<Mesh>,
+    pub transform: Transform,
+    pub material: Handle<StandardMaterial>,
+    pub mesh: Handle<Mesh>,
 }
 
 pub struct ImpPlugin;

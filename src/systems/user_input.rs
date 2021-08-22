@@ -9,6 +9,8 @@ pub use bevy_mod_picking::*;
 
 use crate::entities::*;
 
+use super::{BuildingTool, BuildingToolPlugin, Buildings};
+
 pub struct UserInputPlugin;
 
 impl Plugin for UserInputPlugin {
@@ -16,7 +18,7 @@ impl Plugin for UserInputPlugin {
         app.add_plugin(PickingPlugin)
             .add_plugin(InteractablePickingPlugin)
             .add_plugin(HighlightablePickingPlugin)
-            .add_startup_system_to_stage(StartupStage::PreStartup, load_ghost_assets)
+            .add_plugin(BuildingToolPlugin)
             .add_system(exit_on_esc_system)
             .add_system(spawn_imp_on_key)
             .add_system(make_pickable)
@@ -61,15 +63,38 @@ fn click_boulder(
 }
 
 fn interact_ground(
-    mut cmds: Commands,
     camera: Query<&PickingCamera>,
     models: Query<(Entity, &Parent, &Interaction), With<GroundModel>>,
     interaction_changed: Query<&Interaction, Changed<Interaction>>,
-    mut storage: StorageSpawn,
-    assets: Res<StorageAssets>,
-    mut ghost: Query<(Entity, &mut Transform), With<Ghost>>,
-    ghost_assets: Res<GhostAssets>,
+    mut building_tool: ResMut<BuildingTool>,
+    mut keyboard_input_events: EventReader<KeyboardInput>,
+    mut build_mode: Local<bool>,
 ) {
+    for event in keyboard_input_events.iter() {
+        if let Some(key_code) = event.key_code {
+            if event.state == ElementState::Pressed && key_code == KeyCode::B {
+                let building = building_tool.building.unwrap_or(Buildings::StoneBoulder);
+
+                if *build_mode {
+                    building_tool.building = Some(building.next());
+                } else {
+                    *build_mode = true;
+                    building_tool.building = Some(building);
+                }
+            }
+            if event.state == ElementState::Pressed && key_code == KeyCode::Return {
+                if *build_mode {
+                    *build_mode = false;
+                    building_tool.ghost_visible = false;
+                }
+            }
+        }
+    }
+
+    if !*build_mode {
+        return;
+    }
+
     if let Ok(camera) = camera.single() {
         for (ground_model_entity, _parent, interaction) in models.iter() {
             let changed = interaction_changed.get(ground_model_entity).is_ok();
@@ -79,63 +104,21 @@ fn interact_ground(
             } else {
                 Vec3::ZERO
             };
-            let round_trans = Transform::from_translation(round_pos);
 
             match interaction {
                 Interaction::Clicked if changed => {
-                    //
-                    // TODO interact with some building tool resource instead
-                    //
-                    storage.spawn(Storage, round_trans);
-                    if let Ok((ghost_entity, _ghost_transform)) = ghost.single_mut() {
-                        cmds.entity(ghost_entity).despawn_recursive();
-                    }
-                }
-                Interaction::Clicked => {}
-                Interaction::Hovered if changed => {
-                    if let Ok((_ghost_entity, mut ghost_transform)) = ghost.single_mut() {
-                        ghost_transform.translation = round_pos;
-                    } else {
-                        let model = cmds
-                            .spawn_bundle(PbrBundle {
-                                transform: assets.transform.clone(),
-                                mesh: assets.mesh.clone(),
-                                material: ghost_assets.material.clone(),
-                                ..Default::default()
-                            })
-                            .id();
-
-                        cmds.spawn_bundle((Ghost, round_trans, GlobalTransform::identity()))
-                            .push_children(&[model]);
-                    }
+                    building_tool.build = true;
+                    building_tool.ghost_visible = false;
                 }
                 Interaction::Hovered => {
-                    if let Ok((_ghost_entity, mut ghost_transform)) = ghost.single_mut() {
-                        ghost_transform.translation = round_pos;
-                    }
+                    building_tool.ghost_visible = true;
+                    building_tool.placement.translation = round_pos;
                 }
-                Interaction::None => {
-                    if let Ok((ghost_entity, _ghost_transform)) = ghost.single_mut() {
-                        cmds.entity(ghost_entity).despawn_recursive();
-                    }
+                Interaction::None if changed => {
+                    building_tool.ghost_visible = false;
                 }
+                _ => {}
             }
         }
     }
-}
-
-struct Ghost;
-
-struct GhostAssets {
-    material: Handle<StandardMaterial>,
-}
-
-fn load_ghost_assets(mut cmds: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
-    cmds.insert_resource(GhostAssets {
-        material: materials.add(StandardMaterial {
-            unlit: true,
-            base_color: Color::rgba(1.0, 1.0, 1.0, 0.5),
-            ..Default::default()
-        }),
-    })
 }

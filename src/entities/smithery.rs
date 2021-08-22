@@ -49,9 +49,9 @@ impl<'w, 's> SmitherySpawn<'w, 's> {
 
 #[derive(Clone)]
 pub struct SmitheryAssets {
-    transform: Transform,
-    material: Handle<StandardMaterial>,
-    mesh: Handle<Mesh>,
+    pub transform: Transform,
+    pub material: Handle<StandardMaterial>,
+    pub mesh: Handle<Mesh>,
 }
 
 fn load_smithery_assets(

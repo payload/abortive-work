@@ -27,12 +27,12 @@ impl Boulder {
 
 #[derive(Clone)]
 pub struct BoulderAssets {
-    transform: Transform,
-    stone: Handle<StandardMaterial>,
-    coal: Handle<StandardMaterial>,
-    iron: Handle<StandardMaterial>,
-    gold: Handle<StandardMaterial>,
-    mesh: Handle<Mesh>,
+    pub transform: Transform,
+    pub stone: Handle<StandardMaterial>,
+    pub coal: Handle<StandardMaterial>,
+    pub iron: Handle<StandardMaterial>,
+    pub gold: Handle<StandardMaterial>,
+    pub mesh: Handle<Mesh>,
 }
 
 pub struct BoulderPlugin;

@@ -15,6 +15,9 @@ pub use storage::*;
 mod ground;
 pub use ground::*;
 
+mod res_bundles;
+pub use res_bundles::*;
+
 pub struct NotGround;
 pub struct Blocking;
 
