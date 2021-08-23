@@ -203,9 +203,9 @@ impl<'w, 's> QueryStorages<'w, 's> {
             vec.sort_unstable_by_key(|(_, _, s)| s.prio);
 
             if !vec.is_empty() {
-                let (entity, transform, _storage) = vec[0];
+                let (entity, transform, _storage) = vec.last().unwrap();
                 Target {
-                    entity: Some(entity),
+                    entity: Some(*entity),
                     distance_squared: pos.distance_squared(transform.translation),
                 }
             } else {
