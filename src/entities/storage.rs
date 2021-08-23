@@ -45,7 +45,7 @@ pub struct StorageSpawn<'w, 's> {
 }
 
 impl<'w, 's> StorageSpawn<'w, 's> {
-    pub fn spawn(&mut self, Storage: Storage, transform: Transform) {
+    pub fn spawn(&mut self, storage: Storage, transform: Transform) {
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -58,7 +58,7 @@ impl<'w, 's> StorageSpawn<'w, 's> {
             .id();
 
         self.cmds
-            .spawn_bundle((Storage, transform, GlobalTransform::identity()))
+            .spawn_bundle((storage, transform, GlobalTransform::identity()))
             .push_children(&[model]);
     }
 }

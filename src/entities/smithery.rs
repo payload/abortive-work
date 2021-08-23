@@ -63,7 +63,6 @@ fn update(
             if smithery.work_time >= 1.0 {
                 smithery.work_time -= 1.0;
                 smithery.tools += 1;
-                println!("Tools {}", smithery.tools);
                 smithery.working = false;
             }
         } else {
