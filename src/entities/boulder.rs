@@ -2,11 +2,13 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use super::{Blocking, NotGround};
 
+#[derive(Clone)]
 pub struct Boulder {
     pub material: BoulderMaterial,
     pub marked_for_digging: bool,
 }
 
+#[derive(Clone, Copy)]
 pub enum BoulderMaterial {
     Stone,
     Coal,
