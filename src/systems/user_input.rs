@@ -4,6 +4,7 @@ use bevy::{
     input::{keyboard::KeyboardInput, system::exit_on_esc_system, ElementState},
     math::vec3,
     prelude::*,
+    render::camera::Camera,
 };
 pub use bevy_mod_picking::*;
 
@@ -23,7 +24,44 @@ impl Plugin for UserInputPlugin {
             .add_system(spawn_imp_on_key)
             .add_system(make_pickable)
             .add_system(click_boulder)
-            .add_system(interact_ground);
+            .add_system(interact_ground)
+            .add_system(move_camera);
+    }
+}
+
+fn move_camera(
+    time: Res<Time>,
+    input: Res<Input<KeyCode>>,
+    mut query: Query<&mut Transform, With<Camera>>,
+) {
+    let speed = if input.pressed(KeyCode::LShift) {
+        8.0
+    } else {
+        3.0
+    };
+
+    let dt = time.delta_seconds();
+    let mut control = Vec3::ZERO;
+
+    if input.pressed(KeyCode::W) {
+        control.z += 1.0;
+    }
+    if input.pressed(KeyCode::S) {
+        control.z -= 1.0;
+    }
+    if input.pressed(KeyCode::A) {
+        control.x += 1.0;
+    }
+    if input.pressed(KeyCode::D) {
+        control.x -= 1.0;
+    }
+
+    control = control.normalize_or_zero();
+
+    if let Ok(mut transform) = query.single_mut() {
+        if control != Vec3::ZERO {
+            transform.translation += control.normalize_or_zero() * speed * dt;
+        }
     }
 }
 
