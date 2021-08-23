@@ -2,6 +2,8 @@ use std::f32::consts::TAU;
 
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 
+use crate::systems::FunnyAnimation;
+
 use super::{Boulder, Storage};
 
 pub struct Imp {
@@ -216,14 +218,15 @@ fn load_assets(
 
 fn update_imp(
     time: Res<Time>,
-    mut imps: Query<(Entity, &mut Imp, &Transform)>,
+    mut cmds: Commands,
+    mut imps: Query<(Entity, &mut Imp, &Transform, Option<&FunnyAnimation>)>,
     boulders: QueryBoulders,
     storages: QueryStorages,
 ) {
     use ImpBehavior::*;
     let dt = time.delta_seconds();
 
-    for (_entity, mut imp, transform) in imps.iter_mut() {
+    for (imp_entity, mut imp, transform, animation) in imps.iter_mut() {
         let pos = transform.translation;
 
         match imp.behavior {
@@ -243,7 +246,14 @@ fn update_imp(
                     imp.work_time += dt;
                     imp.loaded_rock += dt;
                     imp.walk_destination = WalkDestination::None;
+                    if animation.is_none() {
+                        cmds.entity(imp_entity)
+                            .insert(FunnyAnimation { offset: 0.0 });
+                    }
                 } else {
+                    if animation.is_some() {
+                        cmds.entity(imp_entity).remove::<FunnyAnimation>();
+                    }
                     imp.walk_destination = imp.target_boulder.into();
                 }
             }
@@ -281,6 +291,11 @@ fn update_imp(
             match old_behavior {
                 Store => {
                     imp.idle_time = 0.0;
+                }
+                Dig => {
+                    if animation.is_some() {
+                        cmds.entity(imp_entity).remove::<FunnyAnimation>();
+                    }
                 }
                 _ => {}
             }
