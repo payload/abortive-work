@@ -7,6 +7,7 @@ use super::{Boulder, Storage};
 pub struct Imp {
     behavior: ImpBehavior,
     idle_time: f32,
+    idle_new_direction_time: f32,
     work_time: f32,
     loaded_rock: f32,
     walk_destination: WalkDestination,
@@ -24,11 +25,6 @@ impl Target {
     fn is_near(&self, threshold: f32) -> bool {
         self.entity
             .map_or(false, |_| self.distance_squared <= threshold)
-    }
-
-    fn is_far(&self, threshold: f32) -> bool {
-        self.entity
-            .map_or(false, |_| self.distance_squared > threshold)
     }
 }
 
@@ -56,9 +52,7 @@ enum WalkDestination {
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum ImpBehavior {
     Idle,
-    WalkToDig,
     Dig,
-    WalkToStore,
     Store,
 }
 
@@ -67,6 +61,7 @@ impl Imp {
         Self {
             behavior: ImpBehavior::Idle,
             idle_time: 1.0,
+            idle_new_direction_time: 1.0,
             work_time: 0.0,
             loaded_rock: 0.0,
             walk_destination: WalkDestination::None,
@@ -233,26 +228,33 @@ fn update_imp(
 
         match imp.behavior {
             Idle => {
-                if imp.idle_time >= 1.0 {
-                    imp.idle_time = imp.idle_time.fract();
+                if imp.idle_new_direction_time >= 1.0 {
+                    imp.idle_new_direction_time = imp.idle_new_direction_time.fract();
                     imp.walk_destination = WalkDestination::Vec3(pos + random_vec());
                 }
 
                 imp.idle_time += dt;
-            }
-            WalkToDig => {
-                imp.walk_destination = imp.target_boulder.into();
+                imp.idle_new_direction_time += dt;
+                imp.target_boulder = Target::default();
+                imp.target_storage = Target::default();
             }
             Dig => {
-                imp.work_time += dt;
-                imp.loaded_rock += dt;
-            }
-            WalkToStore => {
-                imp.walk_destination = imp.target_storage.into();
+                if imp.target_boulder.is_near(1.0) {
+                    imp.work_time += dt;
+                    imp.loaded_rock += dt;
+                    imp.walk_destination = WalkDestination::None;
+                } else {
+                    imp.walk_destination = imp.target_boulder.into();
+                }
             }
             Store => {
-                imp.work_time += dt;
-                imp.loaded_rock = (imp.loaded_rock - dt).max(0.0);
+                if imp.target_storage.is_near(0.1) {
+                    imp.work_time += dt;
+                    imp.loaded_rock = (imp.loaded_rock - dt).max(0.0);
+                    imp.walk_destination = WalkDestination::None;
+                } else {
+                    imp.walk_destination = imp.target_storage.into();
+                }
             }
         }
 
@@ -262,15 +264,14 @@ fn update_imp(
         let old_behavior = imp.behavior;
         let new_behavior = if imp.idle_time < 1.0 {
             Idle
-        } else if imp.loaded_rock > 0.0 && imp.target_storage.is_near(0.1) {
+        } else if imp.target_storage.is_some()
+            && (imp.loaded_rock >= 1.0 || imp.loaded_rock > 0.0 && old_behavior == Store)
+        {
             Store
-        } else if imp.loaded_rock >= 1.0 && imp.target_storage.is_far(0.1) {
-            WalkToStore
-        } else if imp.loaded_rock < 1.0 && imp.target_boulder.is_near(0.1) {
+        } else if imp.target_boulder.is_some() && imp.loaded_rock < 1.0 {
             Dig
-        } else if imp.loaded_rock < 1.0 && imp.target_boulder.is_far(0.1) {
-            WalkToDig
         } else {
+            imp.idle_time = 0.0;
             Idle
         };
 
@@ -278,27 +279,18 @@ fn update_imp(
             imp.behavior = new_behavior;
 
             match old_behavior {
-                Idle => {}
-                WalkToDig => {}
-                Dig => {
-                    imp.target_boulder = Target::default();
-                }
-                WalkToStore => {}
                 Store => {
-                    imp.target_storage = Target::default();
                     imp.idle_time = 0.0;
                 }
+                _ => {}
             }
 
             match new_behavior {
                 Idle => {
-                    imp.idle_time = 0.0;
+                    imp.idle_new_direction_time = 0.0;
                     imp.walk_destination = WalkDestination::Vec3(pos + random_vec());
                 }
-                WalkToDig => {}
-                Dig => {}
-                WalkToStore => {}
-                Store => {}
+                _ => {}
             }
         }
     }
