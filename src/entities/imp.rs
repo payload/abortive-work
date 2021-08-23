@@ -229,45 +229,6 @@ fn update_imp(
     for (imp_entity, mut imp, transform, animation) in imps.iter_mut() {
         let pos = transform.translation;
 
-        match imp.behavior {
-            Idle => {
-                if imp.idle_new_direction_time >= 1.0 {
-                    imp.idle_new_direction_time = imp.idle_new_direction_time.fract();
-                    imp.walk_destination = WalkDestination::Vec3(pos + random_vec());
-                }
-
-                imp.idle_time += dt;
-                imp.idle_new_direction_time += dt;
-                imp.target_boulder = Target::default();
-                imp.target_storage = Target::default();
-            }
-            Dig => {
-                if imp.target_boulder.is_near(1.0) {
-                    imp.work_time += dt;
-                    imp.loaded_rock += dt;
-                    imp.walk_destination = WalkDestination::None;
-                    if animation.is_none() {
-                        cmds.entity(imp_entity)
-                            .insert(FunnyAnimation { offset: 0.0 });
-                    }
-                } else {
-                    if animation.is_some() {
-                        cmds.entity(imp_entity).remove::<FunnyAnimation>();
-                    }
-                    imp.walk_destination = imp.target_boulder.into();
-                }
-            }
-            Store => {
-                if imp.target_storage.is_near(0.1) {
-                    imp.work_time += dt;
-                    imp.loaded_rock = (imp.loaded_rock - dt).max(0.0);
-                    imp.walk_destination = WalkDestination::None;
-                } else {
-                    imp.walk_destination = imp.target_storage.into();
-                }
-            }
-        }
-
         imp.target_boulder = boulders.get_target_boulder(imp.target_boulder, pos);
         imp.target_storage = storages.get_target_storage(imp.target_storage, pos);
 
@@ -306,6 +267,45 @@ fn update_imp(
                     imp.walk_destination = WalkDestination::Vec3(pos + random_vec());
                 }
                 _ => {}
+            }
+        }
+
+        match imp.behavior {
+            Idle => {
+                if imp.idle_new_direction_time >= 1.0 {
+                    imp.idle_new_direction_time = imp.idle_new_direction_time.fract();
+                    imp.walk_destination = WalkDestination::Vec3(pos + random_vec());
+                }
+
+                imp.idle_time += dt;
+                imp.idle_new_direction_time += dt;
+                imp.target_boulder = Target::default();
+                imp.target_storage = Target::default();
+            }
+            Dig => {
+                if imp.target_boulder.is_near(1.0) {
+                    imp.work_time += dt;
+                    imp.loaded_rock += dt;
+                    imp.walk_destination = WalkDestination::None;
+                    if animation.is_none() {
+                        cmds.entity(imp_entity)
+                            .insert(FunnyAnimation { offset: 0.0 });
+                    }
+                } else {
+                    if animation.is_some() {
+                        cmds.entity(imp_entity).remove::<FunnyAnimation>();
+                    }
+                    imp.walk_destination = imp.target_boulder.into();
+                }
+            }
+            Store => {
+                if imp.target_storage.is_near(0.1) {
+                    imp.work_time += dt;
+                    imp.loaded_rock = (imp.loaded_rock - dt).max(0.0);
+                    imp.walk_destination = WalkDestination::None;
+                } else {
+                    imp.walk_destination = imp.target_storage.into();
+                }
             }
         }
     }
