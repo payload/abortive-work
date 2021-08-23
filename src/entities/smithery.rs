@@ -1,15 +1,76 @@
 use crate::systems::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::{Blocking, NotGround};
+use super::{Blocking, NotGround, Rock, Storage};
 
-pub struct Smithery;
+pub struct Smithery {
+    coal: f32,
+    work_time: f32,
+    tools: u32,
+    working: bool,
+}
+
+impl Smithery {
+    pub fn new() -> Self {
+        Self {
+            coal: 1.0,
+            work_time: 0.0,
+            tools: 0,
+            working: false,
+        }
+    }
+}
 
 pub struct SmitheryPlugin;
 
 impl Plugin for SmitheryPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, load_smithery_assets);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
+            .add_system(update);
+    }
+}
+
+fn update(
+    mut smitheries: Query<(Entity, &mut Smithery, &mut Storage, Option<&FunnyAnimation>)>,
+    time: Res<Time>,
+    mut cmds: Commands,
+) {
+    let dt = time.delta_seconds();
+
+    for (entity, mut smithery, mut storage, animation) in smitheries.iter_mut() {
+        let iron = storage.rock.amount;
+
+        if !smithery.working && smithery.coal >= 1.0 && iron >= 1.0 {
+            smithery.working = true;
+        } else if smithery.working && (smithery.coal == 0.0 || iron == 0.0) {
+            smithery.working = false;
+        }
+
+        // if !smithery.working {
+        //     smithery.coal += dt * 0.5;
+        //     smithery.iron += dt * 0.5;
+        // }
+
+        if smithery.working {
+            // smithery.coal -= dt;
+            storage.rock.amount -= dt;
+            smithery.work_time += dt;
+
+            if animation.is_none() {
+                cmds.entity(entity).insert(FunnyAnimation { offset: 0.0 });
+            }
+
+            if smithery.work_time >= 1.0 {
+                smithery.work_time -= 1.0;
+                smithery.tools += 1;
+                println!("Tools {}", smithery.tools);
+                smithery.working = false;
+            }
+        } else {
+            if animation.is_some() {
+                cmds.entity(entity).remove::<FunnyAnimation>();
+            }
+        }
     }
 }
 
@@ -17,7 +78,6 @@ impl Plugin for SmitheryPlugin {
 pub struct SmitherySpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, SmitheryAssets>,
-    time: Res<'w, Time>,
 }
 
 impl<'w, 's> SmitherySpawn<'w, 's> {
@@ -39,8 +99,12 @@ impl<'w, 's> SmitherySpawn<'w, 's> {
                 smithery,
                 transform,
                 GlobalTransform::identity(),
-                FunnyAnimation {
-                    offset: self.time.seconds_since_startup().fract() as f32,
+                Storage {
+                    prio: 2,
+                    rock: Rock {
+                        amount: 0.0,
+                        material: super::BoulderMaterial::Iron,
+                    },
                 },
             ))
             .push_children(&[model]);
@@ -54,7 +118,7 @@ pub struct SmitheryAssets {
     pub mesh: Handle<Mesh>,
 }
 
-fn load_smithery_assets(
+fn load_assets(
     mut cmds: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,

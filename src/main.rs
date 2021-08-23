@@ -51,11 +51,11 @@ fn spawn_level_1(
     boulder.spawn(Boulder::new(Gold), at(1, 3));
     boulder.spawn(Boulder::new(Iron), at(1, 2));
 
-    smithery.spawn(Smithery, at(-3, 2));
+    smithery.spawn(Smithery::new(), at(-3, 2));
 
     imp.spawn(Imp::new(), at(0, 0));
 
-    storage.spawn(Storage::new(), at(0, -1));
+    // storage.spawn(Storage::new(), at(0, -1));
 
     fn at(x: i32, z: i32) -> Transform {
         Transform::from_xyz(x as f32, 0.0, z as f32)

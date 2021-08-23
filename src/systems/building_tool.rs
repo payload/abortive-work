@@ -117,8 +117,8 @@ fn update_building_tool(
                 Buildings::IronBoulder => spawns.boulder.spawn(Boulder::new(Iron), transform),
                 Buildings::GoldBoulder => spawns.boulder.spawn(Boulder::new(Gold), transform),
                 Buildings::Imp => spawns.imp.spawn(Imp::new(), transform),
-                Buildings::Storage => spawns.storage.spawn(Storage, transform),
-                Buildings::Smithery => spawns.smithery.spawn(Smithery, transform),
+                Buildings::Storage => spawns.storage.spawn(Storage::new(), transform),
+                Buildings::Smithery => spawns.smithery.spawn(Smithery::new(), transform),
             }
         }
     }

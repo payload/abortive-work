@@ -8,7 +8,7 @@ pub struct Boulder {
     pub marked_for_digging: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BoulderMaterial {
     Stone,
     Coal,

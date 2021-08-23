@@ -4,14 +4,14 @@ use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 
 use crate::systems::FunnyAnimation;
 
-use super::{Boulder, Storage};
+use super::{Boulder, BoulderMaterial, Rock, Storage};
 
 pub struct Imp {
     behavior: ImpBehavior,
     idle_time: f32,
     idle_new_direction_time: f32,
     work_time: f32,
-    loaded_rock: f32,
+    loaded_rock: Rock,
     walk_destination: WalkDestination,
     target_boulder: Target,
     target_storage: Target,
@@ -65,7 +65,10 @@ impl Imp {
             idle_time: 1.0,
             idle_new_direction_time: 1.0,
             work_time: 0.0,
-            loaded_rock: 0.0,
+            loaded_rock: Rock {
+                amount: 0.0,
+                material: BoulderMaterial::Stone,
+            },
             walk_destination: WalkDestination::None,
             target_boulder: Target::default(),
             target_storage: Target::default(),
@@ -162,29 +165,45 @@ impl<'w, 's> QueryBoulders<'w, 's> {
                 }
             })
     }
+
+    fn material(&self, entity: Entity) -> Option<BoulderMaterial> {
+        self.query.get(entity).map(|(_, _, b)| b.material).ok()
+    }
 }
 
 #[derive(SystemParam)]
 pub struct QueryStorages<'w, 's> {
-    query: Query<'w, 's, (Entity, &'static Transform, &'static Storage)>,
+    query: QuerySet<
+        'w,
+        's,
+        (
+            QueryState<(Entity, &'static Transform, &'static Storage)>,
+            QueryState<&'static mut Storage>,
+        ),
+    >,
 }
 
 impl<'w, 's> QueryStorages<'w, 's> {
-    fn get_target_storage(&self, target: Target, pos: Vec3) -> Target {
+    fn get_target_storage(&mut self, target: Target, pos: Vec3, imp: &Imp) -> Target {
         if let Some(entity) = target.entity {
-            self.query
-                .get(entity)
-                .ok()
-                .map_or(Target::default(), |(_, transform, _storage)| Target {
+            self.query.q0().get(entity).ok().map_or(
+                Target::default(),
+                |(_, transform, _storage)| Target {
                     entity: Some(entity),
                     distance_squared: pos.distance_squared(transform.translation),
-                })
+                },
+            )
         } else {
-            let vec: Vec<_> = self.query.iter().collect();
+            let mut vec: Vec<_> = self
+                .query
+                .q0()
+                .iter()
+                .filter(|(_, _, storage)| storage.is_accepting(imp.loaded_rock.material))
+                .collect();
+            vec.sort_unstable_by_key(|(_, _, s)| s.prio);
 
             if !vec.is_empty() {
-                let index = fastrand::usize(0..vec.len());
-                let (entity, transform, _storage) = vec[index];
+                let (entity, transform, _storage) = vec[0];
                 Target {
                     entity: Some(entity),
                     distance_squared: pos.distance_squared(transform.translation),
@@ -192,6 +211,12 @@ impl<'w, 's> QueryStorages<'w, 's> {
             } else {
                 Target::default()
             }
+        }
+    }
+
+    fn store_rock(&mut self, entity: Entity, rock: Rock) {
+        if let Ok(mut storage) = self.query.q1().get_mut(entity) {
+            storage.store_rock(rock);
         }
     }
 }
@@ -221,7 +246,7 @@ fn update_imp(
     mut cmds: Commands,
     mut imps: Query<(Entity, &mut Imp, &Transform, Option<&FunnyAnimation>)>,
     boulders: QueryBoulders,
-    storages: QueryStorages,
+    mut storages: QueryStorages,
 ) {
     use ImpBehavior::*;
     let dt = time.delta_seconds();
@@ -230,16 +255,17 @@ fn update_imp(
         let pos = transform.translation;
 
         imp.target_boulder = boulders.get_target_boulder(imp.target_boulder, pos);
-        imp.target_storage = storages.get_target_storage(imp.target_storage, pos);
+        imp.target_storage = storages.get_target_storage(imp.target_storage, pos, &imp);
 
         let old_behavior = imp.behavior;
         let new_behavior = if imp.idle_time < 1.0 {
             Idle
         } else if imp.target_storage.is_some()
-            && (imp.loaded_rock >= 1.0 || imp.loaded_rock > 0.0 && old_behavior == Store)
+            && (imp.loaded_rock.amount >= 1.0
+                || imp.loaded_rock.amount > 0.0 && old_behavior == Store)
         {
             Store
-        } else if imp.target_boulder.is_some() && imp.loaded_rock < 1.0 {
+        } else if imp.target_boulder.is_some() && imp.loaded_rock.amount < 1.0 {
             Dig
         } else {
             imp.idle_time = 0.0;
@@ -251,9 +277,13 @@ fn update_imp(
 
             match old_behavior {
                 Store => {
+                    imp.target_storage = Target::default();
+
                     imp.idle_time = 0.0;
                 }
                 Dig => {
+                    imp.target_boulder = Target::default();
+
                     if animation.is_some() {
                         cmds.entity(imp_entity).remove::<FunnyAnimation>();
                     }
@@ -285,7 +315,9 @@ fn update_imp(
             Dig => {
                 if imp.target_boulder.is_near(1.0) {
                     imp.work_time += dt;
-                    imp.loaded_rock += dt;
+                    imp.loaded_rock.amount += dt;
+                    imp.loaded_rock.material =
+                        boulders.material(imp.target_boulder.unwrap()).unwrap();
                     imp.walk_destination = WalkDestination::None;
                     if animation.is_none() {
                         cmds.entity(imp_entity)
@@ -300,9 +332,14 @@ fn update_imp(
             }
             Store => {
                 if imp.target_storage.is_near(0.1) {
-                    imp.work_time += dt;
-                    imp.loaded_rock = (imp.loaded_rock - dt).max(0.0);
                     imp.walk_destination = WalkDestination::None;
+                    imp.work_time += dt;
+                    let rock = Rock {
+                        amount: imp.loaded_rock.amount.min(dt),
+                        material: imp.loaded_rock.material,
+                    };
+                    imp.loaded_rock.amount -= rock.amount;
+                    storages.store_rock(imp.target_storage.entity.unwrap(), rock);
                 } else {
                     imp.walk_destination = imp.target_storage.into();
                 }

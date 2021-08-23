@@ -1,12 +1,32 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::NotGround;
+use super::{BoulderMaterial, NotGround, Rock};
 
-pub struct Storage;
+pub struct Storage {
+    pub rock: Rock,
+    pub prio: i32,
+}
 
 impl Storage {
     pub fn new() -> Self {
-        Self
+        Self {
+            rock: Rock {
+                amount: 0.0,
+                material: BoulderMaterial::Stone,
+            },
+            prio: 0,
+        }
+    }
+
+    pub fn is_accepting(&self, material: BoulderMaterial) -> bool {
+        self.rock.amount == 0.0 || self.rock.material == material
+    }
+
+    pub fn store_rock(&mut self, rock: Rock) {
+        if self.is_accepting(rock.material) {
+            self.rock.amount += rock.amount;
+            self.rock.material = rock.material;
+        }
     }
 }
 
