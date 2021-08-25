@@ -56,7 +56,6 @@ fn load_assets(
             scale: Vec3::ONE,
         },
         material: materials.add(StandardMaterial {
-            unlit: true,
             base_color: Color::rgb(0.5, 0.4, 0.4),
             ..Default::default()
         }),

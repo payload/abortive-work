@@ -149,7 +149,6 @@ fn spawn_ghost(mut cmds: Commands, ghost_assets: Res<GhostAssets>) {
 fn load_ghost_assets(mut cmds: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
     cmds.insert_resource(GhostAssets {
         material: materials.add(StandardMaterial {
-            unlit: true,
             base_color: Color::rgba(1.0, 1.0, 1.0, 0.5),
             ..Default::default()
         }),

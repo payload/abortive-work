@@ -119,7 +119,6 @@ fn load_assets(
     cmds.insert_resource(SmitheryAssets {
         transform: Transform::from_xyz(0.0, 0.4, 0.0),
         material: materials.add(StandardMaterial {
-            unlit: true,
             base_color: Color::DARK_GRAY,
             ..Default::default()
         }),

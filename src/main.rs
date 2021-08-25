@@ -67,6 +67,12 @@ fn spawn_level_1(
 }
 
 fn spawn_camera(mut cmds: Commands) {
+    cmds.spawn().insert(DirectionalLight::new(
+        Color::WHITE,
+        25000.0,
+        Vec3::new(1.0, -1.0, 0.5).normalize(),
+    ));
+
     cmds.spawn_bundle(PerspectiveCameraBundle {
         transform: Transform::from_xyz(0.0, 10.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()

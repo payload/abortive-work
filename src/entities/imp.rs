@@ -239,7 +239,6 @@ fn load_assets(
 
     fn material(color: Color) -> StandardMaterial {
         StandardMaterial {
-            unlit: true,
             base_color: color,
             ..Default::default()
         }
