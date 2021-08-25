@@ -1,32 +1,14 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::{BoulderMaterial, NotGround, Rock};
+use crate::systems::{Store, StoreSlot, ThingFilter};
 
-pub struct Storage {
-    pub rock: Rock,
-    pub prio: i32,
-}
+use super::NotGround;
+
+pub struct Storage {}
 
 impl Storage {
     pub fn new() -> Self {
-        Self {
-            rock: Rock {
-                amount: 0.0,
-                material: BoulderMaterial::Stone,
-            },
-            prio: 0,
-        }
-    }
-
-    pub fn is_accepting(&self, material: BoulderMaterial) -> bool {
-        self.rock.amount == 0.0 || self.rock.material == material
-    }
-
-    pub fn store_rock(&mut self, rock: Rock) {
-        if self.is_accepting(rock.material) {
-            self.rock.amount += rock.amount;
-            self.rock.material = rock.material;
-        }
+        Self {}
     }
 }
 
@@ -58,7 +40,12 @@ impl<'w, 's> StorageSpawn<'w, 's> {
             .id();
 
         self.cmds
-            .spawn_bundle((storage, transform, GlobalTransform::identity()))
+            .spawn_bundle((
+                storage,
+                transform,
+                GlobalTransform::identity(),
+                Store::new(&[StoreSlot::input(50.0, ThingFilter::None)]),
+            ))
             .push_children(&[model]);
     }
 }

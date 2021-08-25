@@ -6,3 +6,6 @@ pub use user_input::*;
 
 mod building_tool;
 pub use building_tool::*;
+
+mod store;
+pub use store::*;

@@ -1,21 +1,17 @@
 use crate::systems::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::{Blocking, NotGround, Rock, Storage};
+use super::{Blocking, NotGround};
 
 pub struct Smithery {
-    coal: f32,
     work_time: f32,
-    tools: u32,
     working: bool,
 }
 
 impl Smithery {
     pub fn new() -> Self {
         Self {
-            coal: 1.0,
             work_time: 0.0,
-            tools: 0,
             working: false,
         }
     }
@@ -31,29 +27,24 @@ impl Plugin for SmitheryPlugin {
 }
 
 fn update(
-    mut smitheries: Query<(Entity, &mut Smithery, &mut Storage, Option<&FunnyAnimation>)>,
+    mut smitheries: Query<(Entity, &mut Smithery, &mut Store, Option<&FunnyAnimation>)>,
     time: Res<Time>,
     mut cmds: Commands,
 ) {
     let dt = time.delta_seconds();
 
-    for (entity, mut smithery, mut storage, animation) in smitheries.iter_mut() {
-        let iron = storage.rock.amount;
+    for (entity, mut smithery, mut store, animation) in smitheries.iter_mut() {
+        let coal = store.amount(0);
+        let iron = store.amount(1);
 
-        if !smithery.working && smithery.coal >= 1.0 && iron >= 1.0 {
+        if !smithery.working && coal >= 1.0 && iron >= 1.0 {
             smithery.working = true;
-        } else if smithery.working && (smithery.coal == 0.0 || iron == 0.0) {
+            smithery.work_time = 0.0;
+        } else if smithery.working && (coal == 0.0 || iron == 0.0) {
             smithery.working = false;
         }
 
-        // if !smithery.working {
-        //     smithery.coal += dt * 0.5;
-        //     smithery.iron += dt * 0.5;
-        // }
-
         if smithery.working {
-            // smithery.coal -= dt;
-            storage.rock.amount -= dt;
             smithery.work_time += dt;
 
             if animation.is_none() {
@@ -61,9 +52,14 @@ fn update(
             }
 
             if smithery.work_time >= 1.0 {
-                smithery.work_time -= 1.0;
-                smithery.tools += 1;
                 smithery.working = false;
+
+                if store.space_for_thing(Thing::Tool) >= 1.0 {
+                    smithery.work_time -= 1.0;
+                    store.decrease(0, 1.0);
+                    store.decrease(1, 1.0);
+                    store.store(2, 1.0, Thing::Tool);
+                }
             }
         } else {
             if animation.is_some() {
@@ -98,13 +94,11 @@ impl<'w, 's> SmitherySpawn<'w, 's> {
                 smithery,
                 transform,
                 GlobalTransform::identity(),
-                Storage {
-                    prio: 2,
-                    rock: Rock {
-                        amount: 0.0,
-                        material: super::BoulderMaterial::Iron,
-                    },
-                },
+                Store::new(&[
+                    StoreSlot::input(5.0, Thing::Coal.into()),
+                    StoreSlot::input(5.0, Thing::Iron.into()),
+                    StoreSlot::output(1.0, Thing::Tool.into()),
+                ]),
             ))
             .push_children(&[model]);
     }

@@ -2,19 +2,20 @@ use std::f32::consts::TAU;
 
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 
-use crate::systems::FunnyAnimation;
+use crate::systems::{FunnyAnimation, Store, Thing};
 
-use super::{Boulder, BoulderMaterial, Rock, Storage};
+use super::Boulder;
 
 pub struct Imp {
     behavior: ImpBehavior,
     idle_time: f32,
     idle_new_direction_time: f32,
     work_time: f32,
-    loaded_rock: Rock,
+    load: Option<Thing>,
+    load_amount: f32,
     walk_destination: WalkDestination,
     target_boulder: Target,
-    target_storage: Target,
+    target_store: Target,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -65,13 +66,11 @@ impl Imp {
             idle_time: 1.0,
             idle_new_direction_time: 1.0,
             work_time: 0.0,
-            loaded_rock: Rock {
-                amount: 0.0,
-                material: BoulderMaterial::Stone,
-            },
+            load_amount: 0.0,
+            load: None,
             walk_destination: WalkDestination::None,
             target_boulder: Target::default(),
-            target_storage: Target::default(),
+            target_store: Target::default(),
         }
     }
 }
@@ -166,57 +165,63 @@ impl<'w, 's> QueryBoulders<'w, 's> {
             })
     }
 
-    fn material(&self, entity: Entity) -> Option<BoulderMaterial> {
-        self.query.get(entity).map(|(_, _, b)| b.material).ok()
+    fn thing(&self, entity: Entity) -> Option<Thing> {
+        self.query
+            .get(entity)
+            .map(|(_, _, b)| b.material.into())
+            .ok()
     }
 }
 
 #[derive(SystemParam)]
-pub struct QueryStorages<'w, 's> {
+pub struct QueryStore<'w, 's> {
     query: QuerySet<
         'w,
         's,
         (
-            QueryState<(Entity, &'static Transform, &'static Storage)>,
-            QueryState<&'static mut Storage>,
+            QueryState<(Entity, &'static Transform, &'static Store)>,
+            QueryState<&'static mut Store>,
         ),
     >,
 }
 
-impl<'w, 's> QueryStorages<'w, 's> {
-    fn get_target_storage(&mut self, target: Target, pos: Vec3, imp: &Imp) -> Target {
-        if let Some(entity) = target.entity {
-            self.query.q0().get(entity).ok().map_or(
-                Target::default(),
-                |(_, transform, _storage)| Target {
-                    entity: Some(entity),
-                    distance_squared: pos.distance_squared(transform.translation),
-                },
-            )
-        } else {
-            let mut vec: Vec<_> = self
-                .query
-                .q0()
-                .iter()
-                .filter(|(_, _, storage)| storage.is_accepting(imp.loaded_rock.material))
-                .collect();
-            vec.sort_unstable_by_key(|(_, _, s)| s.prio);
-
-            if !vec.is_empty() {
-                let (entity, transform, _storage) = vec.last().unwrap();
-                Target {
-                    entity: Some(*entity),
-                    distance_squared: pos.distance_squared(transform.translation),
+impl<'w, 's> QueryStore<'w, 's> {
+    fn get_target_store(&mut self, target: Target, pos: Vec3, imp: &Imp) -> Target {
+        if let Some(load) = imp.load {
+            if let Some(entity) = target.entity {
+                if let Some((_, transform, _)) = self.query.q0().get(entity).ok() {
+                    return Target {
+                        entity: Some(entity),
+                        distance_squared: pos.distance_squared(transform.translation),
+                    };
                 }
             } else {
-                Target::default()
+                let mut stores: Vec<_> = self
+                    .query
+                    .q0()
+                    .iter()
+                    .filter(|(_, _, store)| store.space_for_thing(load) >= 1.0)
+                    .collect();
+                stores.sort_unstable_by_key(|(_, _, s)| -s.priority_of_thing(load));
+
+                if !stores.is_empty() {
+                    let (entity, transform, _) = stores[0];
+                    return Target {
+                        entity: Some(entity),
+                        distance_squared: pos.distance_squared(transform.translation),
+                    };
+                }
             }
         }
+
+        Target::default()
     }
 
-    fn store_rock(&mut self, entity: Entity, rock: Rock) {
-        if let Ok(mut storage) = self.query.q1().get_mut(entity) {
-            storage.store_rock(rock);
+    fn store_thing(&mut self, entity: Entity, amount: f32, thing: Thing) -> f32 {
+        if let Ok(mut store) = self.query.q1().get_mut(entity) {
+            store.store_thing(amount, thing)
+        } else {
+            0.0
         }
     }
 }
@@ -246,7 +251,7 @@ fn update_imp(
     mut cmds: Commands,
     mut imps: Query<(Entity, &mut Imp, &Transform, Option<&FunnyAnimation>)>,
     boulders: QueryBoulders,
-    mut storages: QueryStorages,
+    mut stores: QueryStore,
 ) {
     use ImpBehavior::*;
     let dt = time.delta_seconds();
@@ -255,17 +260,16 @@ fn update_imp(
         let pos = transform.translation;
 
         imp.target_boulder = boulders.get_target_boulder(imp.target_boulder, pos);
-        imp.target_storage = storages.get_target_storage(imp.target_storage, pos, &imp);
+        imp.target_store = stores.get_target_store(imp.target_store, pos, &imp);
 
         let old_behavior = imp.behavior;
         let new_behavior = if imp.idle_time < 1.0 {
             Idle
-        } else if imp.target_storage.is_some()
-            && (imp.loaded_rock.amount >= 1.0
-                || imp.loaded_rock.amount > 0.0 && old_behavior == Store)
+        } else if imp.target_store.is_some()
+            && (imp.load_amount >= 1.0 || imp.load_amount > 0.0 && old_behavior == Store)
         {
             Store
-        } else if imp.target_boulder.is_some() && imp.loaded_rock.amount < 1.0 {
+        } else if imp.target_boulder.is_some() && imp.load_amount < 1.0 {
             Dig
         } else {
             imp.idle_time = 0.0;
@@ -277,7 +281,7 @@ fn update_imp(
 
             match old_behavior {
                 Store => {
-                    imp.target_storage = Target::default();
+                    imp.target_store = Target::default();
 
                     imp.idle_time = 0.0;
                 }
@@ -310,14 +314,17 @@ fn update_imp(
                 imp.idle_time += dt;
                 imp.idle_new_direction_time += dt;
                 imp.target_boulder = Target::default();
-                imp.target_storage = Target::default();
+                imp.target_store = Target::default();
             }
             Dig => {
                 if imp.target_boulder.is_near(1.0) {
                     imp.work_time += dt;
-                    imp.loaded_rock.amount += dt;
-                    imp.loaded_rock.material =
-                        boulders.material(imp.target_boulder.unwrap()).unwrap();
+                    imp.load_amount += dt;
+
+                    // TODO oh, things could change
+                    let thing = boulders.thing(imp.target_boulder.unwrap()).unwrap();
+                    imp.load = Some(thing);
+
                     imp.walk_destination = WalkDestination::None;
                     if animation.is_none() {
                         cmds.entity(imp_entity)
@@ -331,17 +338,16 @@ fn update_imp(
                 }
             }
             Store => {
-                if imp.target_storage.is_near(0.1) {
+                if imp.target_store.is_near(0.1) {
                     imp.walk_destination = WalkDestination::None;
                     imp.work_time += dt;
-                    let rock = Rock {
-                        amount: imp.loaded_rock.amount.min(dt),
-                        material: imp.loaded_rock.material,
-                    };
-                    imp.loaded_rock.amount -= rock.amount;
-                    storages.store_rock(imp.target_storage.entity.unwrap(), rock);
+
+                    let store_entity = imp.target_store.entity.unwrap();
+                    let thing = imp.load.unwrap();
+                    let stored = stores.store_thing(store_entity, imp.load_amount, thing);
+                    imp.load_amount -= stored;
                 } else {
-                    imp.walk_destination = imp.target_storage.into();
+                    imp.walk_destination = imp.target_store.into();
                 }
             }
         }
