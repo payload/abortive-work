@@ -263,26 +263,15 @@ fn update_imp(
         imp.target_store = stores.get_target_store(imp.target_store, pos, &imp);
 
         let old_behavior = imp.behavior;
-        let new_behavior = if imp.idle_time < 1.0 {
-            Idle
-        } else if imp.target_store.is_some()
-            && (imp.load_amount >= 1.0 || imp.load_amount > 0.0 && old_behavior == Store)
-        {
-            Store
-        } else if imp.target_boulder.is_some() && imp.load_amount < 1.0 {
-            Dig
-        } else {
-            imp.idle_time = 0.0;
-            Idle
-        };
+        let new_behavior = choose_new_behavior(&imp, old_behavior);
 
         if old_behavior != new_behavior {
             imp.behavior = new_behavior;
 
+            // leaving old behavior
             match old_behavior {
                 Store => {
                     imp.target_store = Target::default();
-
                     imp.idle_time = 0.0;
                 }
                 Dig => {
@@ -295,8 +284,10 @@ fn update_imp(
                 _ => {}
             }
 
+            // starting new behavior
             match new_behavior {
                 Idle => {
+                    imp.idle_time = 0.0;
                     imp.idle_new_direction_time = 0.0;
                     imp.walk_destination = WalkDestination::Vec3(pos + random_vec());
                 }
@@ -304,6 +295,7 @@ fn update_imp(
             }
         }
 
+        // handling behavior
         match imp.behavior {
             Idle => {
                 if imp.idle_new_direction_time >= 1.0 {
@@ -350,6 +342,20 @@ fn update_imp(
                     imp.walk_destination = imp.target_store.into();
                 }
             }
+        }
+    }
+
+    fn choose_new_behavior(imp: &Imp, old_behavior: ImpBehavior) -> ImpBehavior {
+        if imp.idle_time < 1.0 {
+            Idle
+        } else if imp.target_store.is_some()
+            && (imp.load_amount >= 1.0 || imp.load_amount > 0.0 && old_behavior == Store)
+        {
+            Store
+        } else if imp.target_boulder.is_some() && imp.load_amount < 1.0 {
+            Dig
+        } else {
+            Idle
         }
     }
 
