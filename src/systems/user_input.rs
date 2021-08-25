@@ -6,11 +6,12 @@ use bevy::{
     prelude::*,
     render::camera::Camera,
 };
+use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
 use crate::entities::*;
 
-use super::{BuildingTool, BuildingToolPlugin, Buildings};
+use super::{BuildingTool, BuildingToolPlugin, Buildings, Thing};
 
 pub struct UserInputPlugin;
 
@@ -20,12 +21,15 @@ impl Plugin for UserInputPlugin {
             .add_plugin(InteractablePickingPlugin)
             .add_plugin(HighlightablePickingPlugin)
             .add_plugin(BuildingToolPlugin)
+            .add_plugin(EguiPlugin)
             .add_system(exit_on_esc_system)
             .add_system(spawn_imp_on_key)
             .add_system(make_pickable)
             .add_system(click_boulder)
             .add_system(interact_ground)
-            .add_system(move_camera);
+            .add_system(example_ui)
+            .add_system(move_camera)
+            .insert_resource(UiState::default());
     }
 }
 
@@ -159,4 +163,27 @@ fn interact_ground(
             }
         }
     }
+}
+
+#[derive(Default)]
+struct UiState {
+    thing: Option<Thing>,
+}
+
+fn example_ui(mut state: ResMut<UiState>, egui_ctx: Res<EguiContext>) {
+    let mut thing_copy = state.thing;
+    let thing = &mut thing_copy;
+
+    egui::Window::new("Thing")
+        .scroll(true)
+        .default_width(100.0)
+        .show(egui_ctx.ctx(), |ui| {
+            ui.selectable_value(thing, Some(Thing::Stone), "Stone");
+            ui.selectable_value(thing, Some(Thing::Coal), "Coal");
+            ui.selectable_value(thing, Some(Thing::Iron), "Iron");
+            ui.selectable_value(thing, Some(Thing::Gold), "Gold");
+            ui.selectable_value(thing, Some(Thing::Tool), "Tool");
+        });
+
+    state.thing = thing_copy;
 }
