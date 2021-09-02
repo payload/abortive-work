@@ -1,4 +1,7 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::{EntityCommands, SystemParam},
+    prelude::*,
+};
 
 use super::NotGround;
 
@@ -26,7 +29,7 @@ pub struct MageSpawn<'w, 's> {
 }
 
 impl<'w, 's> MageSpawn<'w, 's> {
-    pub fn spawn(&mut self, mage: Mage, transform: Transform) -> Entity {
+    pub fn spawn<'a>(&'a mut self, mage: Mage, transform: Transform) -> EntityCommands<'w, 's, 'a> {
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -38,10 +41,11 @@ impl<'w, 's> MageSpawn<'w, 's> {
             .insert(NotGround)
             .id();
 
-        self.cmds
-            .spawn_bundle((mage, transform, GlobalTransform::identity()))
-            .push_children(&[model])
-            .id()
+        let mut entity_cmds =
+            self.cmds
+                .spawn_bundle((mage, transform, GlobalTransform::identity()));
+        entity_cmds.push_children(&[model]);
+        entity_cmds
     }
 }
 
