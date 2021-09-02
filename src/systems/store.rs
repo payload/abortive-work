@@ -31,7 +31,7 @@ pub enum ThingFilter {
     Thing(Thing),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
     Input,
     Output,
@@ -115,6 +115,14 @@ impl Store {
             }
         }
         false
+    }
+
+    pub fn first_output_stack(&self) -> Option<Stack> {
+        self.slots
+            .iter()
+            .filter(|slot| slot.direction == Direction::Output)
+            .next()
+            .map(|slot| slot.stack.clone())
     }
 }
 

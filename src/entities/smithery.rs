@@ -75,6 +75,8 @@ pub struct SmitherySpawn<'w, 's> {
     assets: Res<'w, SmitheryAssets>,
 }
 
+pub struct SmitheryModel;
+
 impl<'w, 's> SmitherySpawn<'w, 's> {
     pub fn spawn(&mut self, smithery: Smithery, transform: Transform) {
         let model = self
@@ -87,6 +89,7 @@ impl<'w, 's> SmitherySpawn<'w, 's> {
             })
             .insert(NotGround)
             .insert(Blocking)
+            .insert(SmitheryModel)
             .id();
 
         self.cmds

@@ -11,7 +11,7 @@ pub use bevy_mod_picking::*;
 
 use crate::entities::*;
 
-use super::{BuildingTool, BuildingToolPlugin, Buildings, Thing};
+use super::{BuildingTool, BuildingToolPlugin, Buildings, Store, Thing};
 
 pub struct UserInputPlugin;
 
@@ -29,6 +29,7 @@ impl Plugin for UserInputPlugin {
             .add_system(interact_ground)
             .add_system(example_ui)
             .add_system(click_imp)
+            .add_system(click_smithery)
             .add_system(player_movement)
             .insert_resource(UiState::default());
     }
@@ -135,6 +136,28 @@ fn click_imp(
     }
 }
 
+fn click_smithery(
+    models: Query<(&Parent, &Interaction), (Changed<Interaction>, With<SmitheryModel>)>,
+    mut store: Query<&mut Store>,
+    mut mage: Query<&mut Mage>,
+) {
+    for (parent, interaction) in models.iter() {
+        if let Interaction::Clicked = interaction {
+            if let Ok(store) = store.get_mut(**parent) {
+                if let Ok(mut mage) = mage.single_mut() {
+                    if let Some(stack) = store.first_output_stack() {
+                        if let Some(thing) = stack.thing {
+                            if stack.amount > 0.0 {
+                                mage.put_into_inventory(thing, stack.amount.min(1.0));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn interact_ground(
     camera: Query<&PickingCamera>,
     models: Query<(Entity, &Parent, &Interaction), With<GroundModel>>,
@@ -226,6 +249,7 @@ fn example_ui(mut state: ResMut<UiState>, egui_ctx: Res<EguiContext>, details: D
 pub struct Details<'w, 's> {
     models: Query<'w, 's, (&'static Parent, &'static Selection), With<ImpModel>>,
     imps: Query<'w, 's, &'static Imp>,
+    mage: Query<'w, 's, &'static Mage>,
 }
 
 impl<'w, 's> Details<'w, 's> {
@@ -250,6 +274,22 @@ impl<'w, 's> Details<'w, 's> {
                     None => String::new(),
                 }
             );
+
+            ui.label(desc);
+        }
+
+        for mage in self.mage.single() {
+            let inventory: String = mage
+                .inventory
+                .iter()
+                .filter_map(|stack| {
+                    stack
+                        .thing
+                        .map(|thing| format!(" {:.1} {:?}", stack.amount, thing))
+                })
+                .collect();
+
+            let desc = format!("mage has{}", inventory);
 
             ui.label(desc);
         }

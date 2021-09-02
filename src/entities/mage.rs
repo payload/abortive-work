@@ -5,16 +5,39 @@ use bevy::{
     prelude::*,
 };
 
-use crate::systems::AugmentSpawn;
+use crate::systems::{AugmentSpawn, Stack, Thing};
 
 use super::NotGround;
 
 #[derive(Default)]
-pub struct Mage {}
+pub struct Mage {
+    pub inventory: Vec<Stack>,
+}
 
 impl Mage {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            inventory: vec![
+                Stack::default(),
+                Stack::default(),
+                Stack::default(),
+                Stack::default(),
+            ],
+            ..Self::default()
+        }
+    }
+
+    pub fn put_into_inventory(&mut self, thing: Thing, amount: f32) {
+        for stack in self.inventory.iter_mut() {
+            if stack.thing == Some(thing) {
+                stack.amount += amount;
+                return;
+            } else if stack.thing.is_none() {
+                stack.thing = Some(thing);
+                stack.amount += amount;
+                return;
+            }
+        }
     }
 }
 
