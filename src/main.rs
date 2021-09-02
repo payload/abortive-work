@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::wireframe::WireframePlugin};
+use bevy::prelude::*;
 
 mod entities;
 use entities::*;
@@ -13,6 +13,7 @@ fn main() {
         .add_plugin(EntitiesPlugin)
         .add_plugin(UserInputPlugin)
         .add_plugin(CameraPlugin)
+        .add_plugin(AugmentationPlugin)
         .add_startup_system(spawn_level_1)
         .run();
 

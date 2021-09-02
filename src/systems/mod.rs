@@ -15,3 +15,6 @@ pub use camera::*;
 
 mod meshes;
 pub use meshes::*;
+
+mod augmentation;
+pub use augmentation::*;
