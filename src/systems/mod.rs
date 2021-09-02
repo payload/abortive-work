@@ -12,3 +12,6 @@ pub use store::*;
 
 mod camera;
 pub use camera::*;
+
+mod meshes;
+pub use meshes::*;

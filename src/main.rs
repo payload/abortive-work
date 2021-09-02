@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::wireframe::WireframePlugin};
 
 mod entities;
 use entities::*;
@@ -42,6 +42,7 @@ fn spawn_level_1(
     mut storage: StorageSpawn,
     mut mage: MageSpawn,
     mut camera: CameraSpawn,
+    mut fireplace: FireplaceSpawn,
 ) {
     use BoulderMaterial::*;
 
@@ -66,6 +67,8 @@ fn spawn_level_1(
     camera.spawn();
 
     storage.spawn(Storage::new(), at(0, -1));
+
+    fireplace.spawn(Fireplace::new(), at(0, 0));
 
     fn at(x: i32, z: i32) -> Transform {
         Transform::from_xyz(x as f32, 0.0, z as f32)

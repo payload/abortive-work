@@ -21,6 +21,9 @@ pub use res_bundles::*;
 mod mage;
 pub use mage::*;
 
+mod fireplace;
+pub use fireplace::*;
+
 pub struct NotGround;
 pub struct Blocking;
 
@@ -33,6 +36,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(ImpPlugin)
             .add_plugin(StoragePlugin)
             .add_plugin(MagePlugin)
+            .add_plugin(FireplacePlugin)
             .add_plugin(GroundPlugin);
     }
 }
