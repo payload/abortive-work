@@ -214,7 +214,7 @@ impl From<BoulderMaterial> for Thing {
 
 #[test]
 fn example() {
-    let mut store = Store::new(&[StoreSlot::input(1.0, Thing::Stone.into())]);
+    let _store = Store::new(&[StoreSlot::input(1.0, Thing::Stone.into())]);
 }
 
 // TODO consider store slot direction
