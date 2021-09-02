@@ -1,6 +1,7 @@
 use std::f32::consts::TAU;
 
 use bevy::{
+    ecs::system::SystemParam,
     input::{keyboard::KeyboardInput, system::exit_on_esc_system, ElementState},
     math::vec3,
     prelude::*,
@@ -170,20 +171,56 @@ struct UiState {
     thing: Option<Thing>,
 }
 
-fn example_ui(mut state: ResMut<UiState>, egui_ctx: Res<EguiContext>) {
+fn example_ui(mut state: ResMut<UiState>, egui_ctx: Res<EguiContext>, details: Details) {
     let mut thing_copy = state.thing;
     let thing = &mut thing_copy;
 
     egui::Window::new("Thing")
         .scroll(true)
-        .default_width(100.0)
+        .default_width(200.0)
+        .default_pos((0.0, 0.0))
         .show(egui_ctx.ctx(), |ui| {
             ui.selectable_value(thing, Some(Thing::Stone), "Stone");
             ui.selectable_value(thing, Some(Thing::Coal), "Coal");
             ui.selectable_value(thing, Some(Thing::Iron), "Iron");
             ui.selectable_value(thing, Some(Thing::Gold), "Gold");
             ui.selectable_value(thing, Some(Thing::Tool), "Tool");
+
+            details.add_to_ui(ui);
         });
 
     state.thing = thing_copy;
+}
+
+#[derive(SystemParam)]
+pub struct Details<'w, 's> {
+    models: Query<'w, 's, (&'static Parent, &'static Selection), With<ImpModel>>,
+    imps: Query<'w, 's, &'static Imp>,
+}
+
+impl<'w, 's> Details<'w, 's> {
+    fn add_to_ui(&self, ui: &mut egui::Ui) {
+        for imp in self
+            .models
+            .iter()
+            .filter(|(_, selection)| selection.selected())
+            .filter_map(|(parent, _)| self.imps.get(**parent).ok())
+        {
+            let desc = format!(
+                "{name} {does_something}{and_carries}.",
+                name = "imp",
+                does_something = match imp.behavior {
+                    ImpBehavior::Idle => "does nothing",
+                    ImpBehavior::Dig => "diggs",
+                    ImpBehavior::Store => "stores",
+                },
+                and_carries = match imp.load {
+                    Some(load) => format!(" and carries {:.1} {:?}", imp.load_amount, load),
+                    None => String::new(),
+                }
+            );
+
+            ui.label(desc);
+        }
+    }
 }

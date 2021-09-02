@@ -1,25 +1,27 @@
 use std::f32::consts::TAU;
 
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
+use bevy_mod_picking::PickableBundle;
 
 use crate::systems::{FunnyAnimation, Store, Thing};
 
 use super::Boulder;
 
+#[derive(Clone)]
 pub struct Imp {
-    behavior: ImpBehavior,
-    idle_time: f32,
-    idle_new_direction_time: f32,
-    work_time: f32,
-    load: Option<Thing>,
-    load_amount: f32,
-    walk_destination: WalkDestination,
-    target_boulder: Target,
-    target_store: Target,
+    pub behavior: ImpBehavior,
+    pub idle_time: f32,
+    pub idle_new_direction_time: f32,
+    pub work_time: f32,
+    pub load: Option<Thing>,
+    pub load_amount: f32,
+    pub walk_destination: WalkDestination,
+    pub target_boulder: Target,
+    pub target_store: Target,
 }
 
 #[derive(Clone, Copy, Default)]
-struct Target {
+pub struct Target {
     entity: Option<Entity>,
     distance_squared: f32,
 }
@@ -46,14 +48,15 @@ impl Into<WalkDestination> for Target {
     }
 }
 
-enum WalkDestination {
+#[derive(Clone, Copy, Debug)]
+pub enum WalkDestination {
     None,
     Vec3(Vec3),
     Entity(Entity),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-enum ImpBehavior {
+pub enum ImpBehavior {
     Idle,
     Dig,
     Store,
@@ -98,20 +101,25 @@ pub struct ImpSpawn<'w, 's> {
     assets: Res<'w, ImpAssets>,
 }
 
+pub struct ImpModel;
+
 impl<'w, 's> ImpSpawn<'w, 's> {
     pub fn spawn(&mut self, imp: Imp, transform: Transform) {
-        let pbr_bundle = PbrBundle {
-            transform: self.assets.transform.clone(),
-            material: self.assets.material.clone(),
-            mesh: self.assets.mesh.clone(),
-            ..Default::default()
-        };
+        let model = self
+            .cmds
+            .spawn_bundle(PbrBundle {
+                transform: self.assets.transform.clone(),
+                material: self.assets.material.clone(),
+                mesh: self.assets.mesh.clone(),
+                ..Default::default()
+            })
+            .insert(ImpModel)
+            .insert_bundle(PickableBundle::default())
+            .id();
 
         self.cmds
             .spawn_bundle((imp, transform, GlobalTransform::identity()))
-            .with_children(|p| {
-                p.spawn_bundle(pbr_bundle);
-            });
+            .push_children(&[model]);
     }
 }
 
@@ -189,11 +197,13 @@ impl<'w, 's> QueryStore<'w, 's> {
     fn get_target_store(&mut self, target: Target, pos: Vec3, imp: &Imp) -> Target {
         if let Some(load) = imp.load {
             if let Some(entity) = target.entity {
-                if let Some((_, transform, _)) = self.query.q0().get(entity).ok() {
-                    return Target {
-                        entity: Some(entity),
-                        distance_squared: pos.distance_squared(transform.translation),
-                    };
+                if let Some((_, transform, store)) = self.query.q0().get(entity).ok() {
+                    if store.space_for_thing(load) > 0.0 {
+                        return Target {
+                            entity: Some(entity),
+                            distance_squared: pos.distance_squared(transform.translation),
+                        };
+                    }
                 }
             } else {
                 let mut stores: Vec<_> = self
