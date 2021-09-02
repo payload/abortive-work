@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use super::{Blocking, MageInteractable, NotGround};
@@ -53,10 +55,17 @@ pub struct BoulderSpawn<'w, 's> {
 
 impl<'w, 's> BoulderSpawn<'w, 's> {
     pub fn spawn(&mut self, boulder: Boulder, transform: Transform) {
+        let mut base = self.assets.transform.clone();
+        base.translation.y -= 0.1 + 0.2 * fastrand::f32();
+        base.rotate(
+            Quat::from_rotation_z(0.125 * PI * (0.5 - fastrand::f32()))
+                .mul_quat(Quat::from_rotation_x(0.125 * PI * (0.5 - fastrand::f32()))),
+        );
+
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
-                transform: self.assets.transform.clone(),
+                transform: base,
                 material: match boulder.material {
                     BoulderMaterial::Stone => self.assets.stone.clone(),
                     BoulderMaterial::Coal => self.assets.coal.clone(),
@@ -93,7 +102,7 @@ fn load_boulder_assets(
         coal: materials.add(material(Color::BLACK)),
         gold: materials.add(material(Color::GOLD)),
         iron: materials.add(material(Color::ORANGE_RED)),
-        mesh: meshes.add(shape::Box::new(0.8, 1.0, 0.8).into()),
+        mesh: meshes.add(shape::Box::new(1.0, 1.0, 1.0).into()),
     });
 
     fn material(color: Color) -> StandardMaterial {
