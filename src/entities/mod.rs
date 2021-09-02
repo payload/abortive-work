@@ -18,6 +18,9 @@ pub use ground::*;
 mod res_bundles;
 pub use res_bundles::*;
 
+mod mage;
+pub use mage::*;
+
 pub struct NotGround;
 pub struct Blocking;
 
@@ -29,6 +32,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(SmitheryPlugin)
             .add_plugin(ImpPlugin)
             .add_plugin(StoragePlugin)
+            .add_plugin(MagePlugin)
             .add_plugin(GroundPlugin);
     }
 }

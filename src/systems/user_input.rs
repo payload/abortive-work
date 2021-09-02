@@ -5,7 +5,6 @@ use bevy::{
     input::{keyboard::KeyboardInput, system::exit_on_esc_system, ElementState},
     math::vec3,
     prelude::*,
-    render::camera::Camera,
 };
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
@@ -29,15 +28,15 @@ impl Plugin for UserInputPlugin {
             .add_system(click_boulder)
             .add_system(interact_ground)
             .add_system(example_ui)
-            .add_system(move_camera)
+            .add_system(player_movement)
             .insert_resource(UiState::default());
     }
 }
 
-fn move_camera(
+fn player_movement(
     time: Res<Time>,
     input: Res<Input<KeyCode>>,
-    mut query: Query<&mut Transform, With<Camera>>,
+    mut query: Query<&mut Transform, With<Mage>>,
 ) {
     let speed = if input.pressed(KeyCode::LShift) {
         8.0

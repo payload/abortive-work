@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 mod entities;
 use entities::*;
@@ -13,7 +13,6 @@ fn main() {
         .add_plugin(EntitiesPlugin)
         .add_plugin(UserInputPlugin)
         .add_startup_system(spawn_level_1)
-        .add_startup_system(spawn_camera)
         .run();
 
     // a portal which produces imps next to it
@@ -35,11 +34,14 @@ fn main() {
 }
 
 fn spawn_level_1(
+    mut cmds: Commands,
     mut ground: GroundSpawn,
     mut boulder: BoulderSpawn,
     mut smithery: SmitherySpawn,
     mut imp: ImpSpawn,
     mut storage: StorageSpawn,
+    mut mage: MageSpawn,
+    mut camera: CameraSpawn,
 ) {
     use BoulderMaterial::*;
 
@@ -59,6 +61,10 @@ fn spawn_level_1(
 
     imp.spawn(Imp::new(), at(0, 0));
 
+    let mage_entity = mage.spawn(Mage::new(), at(-1, 0));
+    let camera_entity = camera.spawn();
+    cmds.entity(mage_entity).push_children(&[camera_entity]);
+
     storage.spawn(Storage::new(), at(0, -1));
 
     fn at(x: i32, z: i32) -> Transform {
@@ -66,16 +72,25 @@ fn spawn_level_1(
     }
 }
 
-fn spawn_camera(mut cmds: Commands) {
-    cmds.spawn().insert(DirectionalLight::new(
-        Color::WHITE,
-        25000.0,
-        Vec3::new(1.0, -1.0, 0.5).normalize(),
-    ));
+#[derive(SystemParam)]
+struct CameraSpawn<'w, 's> {
+    cmds: Commands<'w, 's>,
+}
 
-    cmds.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(0.0, 10.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
-    })
-    .insert_bundle(PickingCameraBundle::default());
+impl<'w, 's> CameraSpawn<'w, 's> {
+    fn spawn(&mut self) -> Entity {
+        let Self { cmds, .. } = self;
+        cmds.spawn().insert(DirectionalLight::new(
+            Color::WHITE,
+            25000.0,
+            Vec3::new(1.0, -1.0, 0.5).normalize(),
+        ));
+
+        cmds.spawn_bundle(PerspectiveCameraBundle {
+            transform: Transform::from_xyz(0.0, 10.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..Default::default()
+        })
+        .insert_bundle(PickingCameraBundle::default())
+        .id()
+    }
 }
