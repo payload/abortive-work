@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::systems::disk;
 
-use super::NotGround;
+use super::{MageInteractable, NotGround};
 
 #[derive(Default)]
 pub struct Fireplace {}
@@ -47,9 +47,12 @@ impl<'w, 's> FireplaceSpawn<'w, 's> {
             .insert(NotGround)
             .id();
 
-        let mut entity_cmds =
-            self.cmds
-                .spawn_bundle((fireplace, transform, GlobalTransform::identity()));
+        let mut entity_cmds = self.cmds.spawn_bundle((
+            fireplace,
+            transform,
+            GlobalTransform::identity(),
+            MageInteractable::default(),
+        ));
         entity_cmds.push_children(&[model]);
         entity_cmds
     }

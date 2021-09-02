@@ -10,52 +10,44 @@ use bevy::{
 
 use super::disk;
 
-pub enum Augment {
-    Coin,
-    Pedestal,
-}
-
 pub struct AugmentationPlugin;
 
 impl Plugin for AugmentationPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system_to_stage(CoreStage::PostUpdate, update_augmentation)
-            .add_system(coin_animation);
+            .add_system(coin_animation)
+            .insert_resource(AugmentState::default());
     }
 }
 
-fn update_augmentation(
-    mut cmds: Commands,
-    mut map: Local<EntityMap>,
-    added: Query<(Entity, &Augment), Added<Augment>>,
-    removed: RemovedComponents<Augment>,
-    mut spawn: AugmentSpawn,
-) {
-    for (entity, augment) in added.iter() {
-        let augment_entity = match augment {
-            Augment::Coin => spawn.spawn_coin().id(),
-            Augment::Pedestal => spawn.spawn_pedestal().id(),
-        };
-
-        cmds.entity(entity).push_children(&[augment_entity]);
-        map.insert(entity, augment_entity);
-    }
-
-    for entity in removed.iter() {
-        if let Ok(augment_entity) = map.get(entity) {
-            cmds.entity(augment_entity).despawn_recursive();
-        }
-    }
+#[derive(Default)]
+pub struct AugmentState {
+    coins: EntityMap,
 }
 
 #[derive(SystemParam)]
 pub struct AugmentSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, AugmentAssets>,
+    state: ResMut<'w, AugmentState>,
 }
 
 impl<'w, 's> AugmentSpawn<'w, 's> {
+    pub fn add_coin(&mut self, entity: Entity) {
+        if self.state.coins.get(entity).is_err() {
+            let coin = self.spawn_coin().id();
+            self.cmds.entity(entity).push_children(&[coin]);
+            self.state.coins.insert(entity, coin);
+        }
+    }
+
+    pub fn remove_coin(&mut self, entity: Entity) {
+        for coin in self.state.coins.get(entity) {
+            self.cmds.entity(coin).despawn_recursive();
+            self.state.coins.remove(entity);
+        }
+    }
+
     pub fn spawn_coin<'a>(&'a mut self) -> EntityCommands<'w, 's, 'a> {
         let model = self
             .cmds
@@ -114,7 +106,7 @@ fn load_assets(
     cmds.insert_resource(AugmentAssets {
         coin_transform: Transform::from_rotation(Quat::from_rotation_z(0.5 * PI)),
         coin_material: materials.add(color_material(Color::ORANGE)),
-        coin_mesh: meshes.add(disk(0.2, 12)),
+        coin_mesh: meshes.add(shape::Box::new(0.2, 0.0, 0.2).into()),
 
         pedestal_transform: Transform::identity(),
         pedestal_material: materials.add(color_material(Color::ANTIQUE_WHITE)),

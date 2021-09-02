@@ -1,6 +1,6 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::{Blocking, NotGround};
+use super::{Blocking, MageInteractable, NotGround};
 
 #[derive(Clone)]
 pub struct Boulder {
@@ -72,7 +72,12 @@ impl<'w, 's> BoulderSpawn<'w, 's> {
             .id();
 
         self.cmds
-            .spawn_bundle((boulder, transform, GlobalTransform::identity()))
+            .spawn_bundle((
+                boulder,
+                transform,
+                GlobalTransform::identity(),
+                MageInteractable::default(),
+            ))
             .push_children(&[model]);
     }
 }
