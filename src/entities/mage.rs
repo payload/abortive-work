@@ -1,3 +1,5 @@
+use std::f32::consts::FRAC_PI_4;
+
 use bevy::{
     ecs::system::{EntityCommands, SystemParam},
     prelude::*,
@@ -65,7 +67,11 @@ fn load_assets(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     cmds.insert_resource(MageAssets {
-        transform: Transform::from_xyz(0.0, 0.25, 0.0),
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.25, 0.0),
+            rotation: Quat::from_rotation_y(-FRAC_PI_4),
+            scale: Vec3::ONE,
+        },
         material: materials.add(StandardMaterial {
             base_color: Color::MIDNIGHT_BLUE,
             metallic: 0.0,
@@ -75,7 +81,7 @@ fn load_assets(
         }),
         mesh: meshes.add(
             shape::Capsule {
-                latitudes: 2,
+                latitudes: 16,
                 longitudes: 4,
                 ..Default::default()
             }

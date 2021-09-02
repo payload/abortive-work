@@ -18,6 +18,7 @@ pub struct Imp {
     pub walk_destination: WalkDestination,
     pub target_boulder: Target,
     pub target_store: Target,
+    pub want_to_follow: Option<Entity>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -55,11 +56,12 @@ pub enum WalkDestination {
     Entity(Entity),
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ImpBehavior {
     Idle,
     Dig,
     Store,
+    Follow(Entity),
 }
 
 impl Imp {
@@ -74,7 +76,12 @@ impl Imp {
             walk_destination: WalkDestination::None,
             target_boulder: Target::default(),
             target_store: Target::default(),
+            want_to_follow: None,
         }
+    }
+
+    pub fn maybe_follow(&mut self, entity: Entity) {
+        self.want_to_follow = Some(entity);
     }
 }
 
@@ -91,6 +98,7 @@ impl Plugin for ImpPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system(update_imp.label("imp"))
+            .add_system(update_imp_commands)
             .add_system(update_walk.after("imp"));
     }
 }
@@ -118,7 +126,12 @@ impl<'w, 's> ImpSpawn<'w, 's> {
             .id();
 
         self.cmds
-            .spawn_bundle((imp, transform, GlobalTransform::identity()))
+            .spawn_bundle((
+                imp,
+                transform,
+                GlobalTransform::identity(),
+                ImpCommands::default(),
+            ))
             .push_children(&[model]);
     }
 }
@@ -161,15 +174,15 @@ impl<'w, 's> QueryBoulders<'w, 's> {
         self.query
             .get(entity)
             .ok()
-            .map_or(Target::default(), |(_, transform, boulder)| {
-                if boulder.marked_for_digging {
-                    Target {
-                        entity: Some(entity),
-                        distance_squared: pos.distance_squared(transform.translation),
-                    }
-                } else {
-                    Target::default()
+            .map_or(Target::default(), |(_, transform, _boulder)| {
+                // if boulder.marked_for_digging {
+                Target {
+                    entity: Some(entity),
+                    distance_squared: pos.distance_squared(transform.translation),
                 }
+                // } else {
+                // Target::default()
+                // }
             })
     }
 
@@ -351,11 +364,16 @@ fn update_imp(
                     imp.walk_destination = imp.target_store.into();
                 }
             }
+            Follow(entity) => {
+                imp.walk_destination = WalkDestination::Entity(entity);
+            }
         }
     }
 
     fn choose_new_behavior(imp: &Imp, old_behavior: ImpBehavior) -> ImpBehavior {
-        if imp.idle_time < 1.0 {
+        if let Some(entity) = imp.want_to_follow {
+            Follow(entity)
+        } else if imp.idle_time < 1.0 {
             Idle
         } else if imp.target_store.is_some()
             && (imp.load_amount >= 1.0 || imp.load_amount > 0.0 && old_behavior == Store)
@@ -400,5 +418,32 @@ fn update_walk(
         let speed = 3.0;
         let step = vec * speed * dt;
         transform.translation += step;
+    }
+}
+
+#[derive(Default)]
+pub struct ImpCommands {
+    pub commands: Vec<ImpCommand>,
+}
+
+pub enum ImpCommand {
+    Dig(Entity),
+}
+
+fn update_imp_commands(mut imps: Query<(&mut Imp, &mut ImpCommands)>) {
+    for (mut imp, mut imp_cmds) in imps.iter_mut() {
+        for cmd in imp_cmds.commands.drain(0..) {
+            match cmd {
+                ImpCommand::Dig(entity) => {
+                    imp.want_to_follow = None;
+                    imp.idle_time = 1.0;
+                    imp.target_store = Target::default();
+                    imp.target_boulder = Target {
+                        entity: Some(entity),
+                        distance_squared: 1000.0,
+                    };
+                }
+            }
+        }
     }
 }

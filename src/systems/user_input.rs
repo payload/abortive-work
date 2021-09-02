@@ -28,6 +28,7 @@ impl Plugin for UserInputPlugin {
             .add_system(click_boulder)
             .add_system(interact_ground)
             .add_system(example_ui)
+            .add_system(click_imp)
             .add_system(player_movement)
             .insert_resource(UiState::default());
     }
@@ -94,11 +95,41 @@ fn make_pickable(
 fn click_boulder(
     models: Query<(&Parent, &Interaction), (Changed<Interaction>, With<BoulderModel>)>,
     mut boulders: Query<&mut Boulder>,
+    //
+    mage: Query<Entity, With<Mage>>,
+    mut imps: Query<(Entity, &Imp, &mut ImpCommands)>,
 ) {
     for (parent, interaction) in models.iter() {
         if let Interaction::Clicked = interaction {
-            if let Ok(mut boulder) = boulders.get_mut(**parent) {
-                boulder.marked_for_digging = !boulder.marked_for_digging;
+            let boulder_entity = **parent;
+            let boulder = boulders.get_mut(boulder_entity);
+            let mage = mage.single();
+            if let (Ok(_), Ok(mage)) = (boulder, mage) {
+                for (_, _, mut imp_cmds) in imps.iter_mut().filter(|(_, imp, _)| {
+                    if let Some(e) = imp.want_to_follow {
+                        e == mage
+                    } else {
+                        false
+                    }
+                }) {
+                    imp_cmds.commands.push(ImpCommand::Dig(boulder_entity));
+                }
+            }
+        }
+    }
+}
+
+fn click_imp(
+    models: Query<(&Parent, &Interaction), (Changed<Interaction>, With<ImpModel>)>,
+    mut imp: Query<&mut Imp>,
+    mage: Query<Entity, With<Mage>>,
+) {
+    for (parent, interaction) in models.iter() {
+        if let Interaction::Clicked = interaction {
+            if let Ok(mut imp) = imp.get_mut(**parent) {
+                if let Ok(mage) = mage.single() {
+                    imp.maybe_follow(mage);
+                }
             }
         }
     }
@@ -212,6 +243,7 @@ impl<'w, 's> Details<'w, 's> {
                     ImpBehavior::Idle => "does nothing",
                     ImpBehavior::Dig => "diggs",
                     ImpBehavior::Store => "stores",
+                    ImpBehavior::Follow(_) => "follows",
                 },
                 and_carries = match imp.load {
                     Some(load) => format!(" and carries {:.1} {:?}", imp.load_amount, load),

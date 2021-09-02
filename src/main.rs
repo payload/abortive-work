@@ -64,7 +64,7 @@ fn spawn_level_1(
     imp.spawn(Imp::new(), at(0, 0));
 
     mage.spawn(Mage::new(), at(-1, 0))
-        .insert(CameraTracking::new(0.0, 10.0, -5.0));
+        .insert(CameraTracking::new(0.0, 10.0, -3.0));
     camera.spawn();
 
     storage.spawn(Storage::new(), at(0, -1));
