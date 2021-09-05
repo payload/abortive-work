@@ -24,6 +24,9 @@ pub use mage::*;
 mod fireplace;
 pub use fireplace::*;
 
+mod pile;
+pub use pile::*;
+
 pub struct NotGround;
 pub struct Blocking;
 
@@ -37,6 +40,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(StoragePlugin)
             .add_plugin(MagePlugin)
             .add_plugin(FireplacePlugin)
+            .add_plugin(PilePlugin)
             .add_plugin(GroundPlugin);
     }
 }

@@ -44,10 +44,31 @@ fn spawn_level_1(
     mut mage: MageSpawn,
     mut camera: CameraSpawn,
     mut fireplace: FireplaceSpawn,
+    mut pile: PileSpawn,
 ) {
     use BoulderMaterial::*;
 
     ground.spawn(Ground, at(0, 0));
+
+    let map = generate_planetary_noise_map();
+    let (w, h) = map.size();
+    let hx = -0.5 * w as f32;
+    let hz = -0.5 * h as f32;
+
+    for y in 0..h {
+        for x in 0..w {
+            let v = map.get_value(x, y);
+            let x = x as f32;
+            let z = y as f32;
+
+            if v > 0.3 {
+                boulder.spawn(
+                    Boulder::new(Stone),
+                    Transform::from_xyz(x + hx, 0.0, z + hz),
+                );
+            }
+        }
+    }
 
     boulder.spawn(Boulder::new(Stone), at(6, 3));
     boulder.spawn(Boulder::new(Stone), at(6, 2));
@@ -59,7 +80,7 @@ fn spawn_level_1(
 
     boulder.spawn(Boulder::new(Coal), at(1, 4));
 
-    smithery.spawn(Smithery::new(), at(-3, -2));
+    smithery.spawn(Smithery::new(), at(3, -2));
 
     imp.spawn(Imp::new(), at(0, 0));
 
@@ -70,6 +91,8 @@ fn spawn_level_1(
     storage.spawn(Storage::new(), at(0, -1));
 
     fireplace.spawn(Fireplace::new(), at(0, 0));
+
+    pile.spawn(Pile::new(Thing::Coal, 1.0), at(0, 1));
 
     fn at(x: i32, z: i32) -> Transform {
         Transform::from_xyz(x as f32, 0.0, z as f32)

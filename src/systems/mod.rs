@@ -18,3 +18,6 @@ pub use meshes::*;
 
 mod augmentation;
 pub use augmentation::*;
+
+mod map_gen;
+pub use map_gen::*;
