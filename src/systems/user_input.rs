@@ -11,7 +11,7 @@ pub use bevy_mod_picking::*;
 
 use crate::entities::*;
 
-use super::{BuildingTool, BuildingToolPlugin, Buildings, Store, Thing};
+use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, Store, Thing};
 
 pub struct UserInputPlugin;
 
@@ -110,21 +110,32 @@ fn click_boulder(
     //
     mage: Query<Entity, With<Mage>>,
     mut imps: Query<(Entity, &Imp, &mut ImpCommands)>,
+    mut augment: AugmentSpawn,
 ) {
     for (parent, interaction) in models.iter() {
         if let Interaction::Clicked = interaction {
             let boulder_entity = **parent;
             let boulder = boulders.get_mut(boulder_entity);
             let mage = mage.single();
-            if let (Ok(_), Ok(mage)) = (boulder, mage) {
-                for (_, _, mut imp_cmds) in imps.iter_mut().filter(|(_, imp, _)| {
-                    if let Some(e) = imp.want_to_follow {
-                        e == mage
-                    } else {
-                        false
+            if let (Ok(mut boulder), Ok(mage)) = (boulder, mage) {
+                let following_imps: Vec<_> = imps
+                    .iter_mut()
+                    .filter(|(_, imp, _)| {
+                        if let Some(e) = imp.want_to_follow {
+                            e == mage
+                        } else {
+                            false
+                        }
+                    })
+                    .collect();
+
+                if following_imps.is_empty() {
+                    boulder.marked_for_digging = !boulder.marked_for_digging;
+                    augment.with_pedestal(boulder_entity, boulder.marked_for_digging);
+                } else {
+                    for (_, _, mut imp_cmds) in following_imps {
+                        imp_cmds.commands.push(ImpCommand::Dig(boulder_entity));
                     }
-                }) {
-                    imp_cmds.commands.push(ImpCommand::Dig(boulder_entity));
                 }
             }
         }

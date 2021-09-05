@@ -6,7 +6,7 @@ use entities::*;
 mod systems;
 use noice::{
     utils::{NoiseMapBuilder, PlaneMapBuilder},
-    Fbm, Perlin,
+    Fbm,
 };
 use systems::*;
 

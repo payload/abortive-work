@@ -23,6 +23,7 @@ impl Plugin for AugmentationPlugin {
 #[derive(Default)]
 pub struct AugmentState {
     coins: EntityMap,
+    pedestals: EntityMap,
 }
 
 #[derive(SystemParam)]
@@ -45,6 +46,29 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
         for coin in self.state.coins.get(entity) {
             self.cmds.entity(coin).despawn_recursive();
             self.state.coins.remove(entity);
+        }
+    }
+
+    pub fn with_pedestal(&mut self, entity: Entity, enabled: bool) {
+        if enabled {
+            self.add_pedestal(entity);
+        } else {
+            self.remove_pedestal(entity);
+        }
+    }
+
+    pub fn add_pedestal(&mut self, entity: Entity) {
+        if self.state.pedestals.get(entity).is_err() {
+            let pedestal = self.spawn_pedestal().id();
+            self.cmds.entity(entity).push_children(&[pedestal]);
+            self.state.pedestals.insert(entity, pedestal);
+        }
+    }
+
+    pub fn remove_pedestal(&mut self, entity: Entity) {
+        for pedestal in self.state.pedestals.get(entity) {
+            self.cmds.entity(pedestal).despawn_recursive();
+            self.state.pedestals.remove(entity);
         }
     }
 
@@ -110,7 +134,7 @@ fn load_assets(
 
         pedestal_transform: Transform::identity(),
         pedestal_material: materials.add(color_material(Color::ANTIQUE_WHITE)),
-        pedestal_mesh: meshes.add(disk(0.6, 24)),
+        pedestal_mesh: meshes.add(disk(0.9, 24)),
     });
 
     fn color_material(color: Color) -> StandardMaterial {
