@@ -56,7 +56,7 @@ use noice::{utils::*, *};
 ///
 /// A description for each group and subgroup can be found above the source
 /// code for that group and subgroup.
-#[allow(non_snake_case)]
+#[allow(non_snake_case, unused)]
 pub fn generate_planetary_noise_map() -> NoiseMap {
     /// Planet seed. Change this to generate a different planet.
     const CURRENT_SEED: u32 = 96;
@@ -1743,11 +1743,11 @@ pub fn generate_planetary_noise_map() -> NoiseMap {
         .set_x_bounds(-2.0, 2.0)
         .set_y_bounds(-2.0, 2.0)
         .build();
-    
+
     noise_map
 }
 
-fn render_noise_map_to_png(filename: &str, noise_map: &NoiseMap) {
+pub fn render_noise_map_to_png(filename: &str, noise_map: &NoiseMap) {
     ImageRenderer::new()
         .set_gradient(ColorGradient::new().build_terrain_gradient())
         .render(noise_map)

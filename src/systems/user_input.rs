@@ -71,13 +71,24 @@ fn player_movement(
     }
 }
 
-fn spawn_imp_on_key(mut imp: ImpSpawn, mut keyboard_input_events: EventReader<KeyboardInput>) {
+pub struct ImpSpawnPoint;
+
+fn spawn_imp_on_key(
+    mut imp: ImpSpawn,
+    mut keyboard_input_events: EventReader<KeyboardInput>,
+    spawn_point: Query<&Transform, With<ImpSpawnPoint>>,
+) {
+    let spawn_point = spawn_point
+        .single()
+        .map(|t| t.translation)
+        .unwrap_or(Vec3::ZERO);
+
     for event in keyboard_input_events.iter() {
         if let Some(key_code) = event.key_code {
             if event.state == ElementState::Pressed && key_code == KeyCode::I {
                 let a = TAU * fastrand::f32();
                 let vec = vec3(a.cos(), 0.0, a.sin());
-                imp.spawn(Imp::new(), Transform::from_xyz(vec.x, 0.0, vec.z));
+                imp.spawn(Imp::new(), Transform::from_translation(vec + spawn_point));
             }
         }
     }

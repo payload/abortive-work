@@ -4,6 +4,10 @@ mod entities;
 use entities::*;
 
 mod systems;
+use noice::{
+    utils::{NoiseMapBuilder, PlaneMapBuilder},
+    Fbm, Perlin,
+};
 use systems::*;
 
 fn main() {
@@ -45,12 +49,19 @@ fn spawn_level_1(
     mut camera: CameraSpawn,
     mut fireplace: FireplaceSpawn,
     mut pile: PileSpawn,
+    mut cmds: Commands,
 ) {
     use BoulderMaterial::*;
 
-    ground.spawn(Ground, at(0, 0));
+    let noise = Fbm::new();
+    let map = PlaneMapBuilder::new(&noise)
+        .set_size(128, 128)
+        .set_x_bounds(-2.0, 2.0)
+        .set_y_bounds(-2.0, 2.0)
+        .build();
 
-    let map = generate_planetary_noise_map();
+    render_noise_map_to_png("map.png", &map);
+
     let (w, h) = map.size();
     let hx = -0.5 * w as f32;
     let hz = -0.5 * h as f32;
@@ -60,25 +71,30 @@ fn spawn_level_1(
             let v = map.get_value(x, y);
             let x = x as f32;
             let z = y as f32;
+            let transform = Transform::from_xyz(x + hx, 0.0, z + hz);
 
-            if v > 0.3 {
-                boulder.spawn(
-                    Boulder::new(Stone),
-                    Transform::from_xyz(x + hx, 0.0, z + hz),
-                );
+            if v > 0.3 && 0.4 > v {
+                boulder.spawn(Boulder::new(Stone), transform);
+            } else if v > 0.4 && 0.45 > v {
+                boulder.spawn(Boulder::new(Coal), transform);
+            } else if v > 0.45 && 0.47 > v {
+                boulder.spawn(Boulder::new(Stone), transform);
+            } else if v > 0.47 && 0.49 > v {
+                boulder.spawn(Boulder::new(Iron), transform);
+            } else if v > 0.48 && 0.53 > v && fastrand::f32() < 0.05 {
+                boulder.spawn(Boulder::new(Gold), transform);
+            } else if v > 0.47 && 1.0 > v {
+                boulder.spawn(Boulder::new(Stone), transform);
             }
         }
     }
 
-    boulder.spawn(Boulder::new(Stone), at(6, 3));
-    boulder.spawn(Boulder::new(Stone), at(6, 2));
-    boulder.spawn(Boulder::new(Stone), at(6, 1));
+    let center = Vec3::new(7.0, 0.0, 6.0);
+    let at = |x: i32, z: i32| -> Transform {
+        Transform::from_xyz(center.x + x as f32, 0.0, center.z + z as f32)
+    };
 
-    boulder.spawn(Boulder::new(Iron), at(-6, 2));
-    boulder.spawn(Boulder::new(Iron), at(-6, 1));
-    boulder.spawn(Boulder::new(Iron), at(-6, 0));
-
-    boulder.spawn(Boulder::new(Coal), at(1, 4));
+    ground.spawn(Ground, at(0, 0));
 
     smithery.spawn(Smithery::new(), at(3, -2));
 
@@ -86,7 +102,7 @@ fn spawn_level_1(
 
     mage.spawn(Mage::new(), at(-1, 0))
         .insert(CameraTracking::new(0.0, 10.0, -3.0));
-    camera.spawn();
+    camera.spawn(center);
 
     storage.spawn(Storage::new(), at(0, -1));
 
@@ -94,7 +110,5 @@ fn spawn_level_1(
 
     pile.spawn(Pile::new(Thing::Coal, 1.0), at(0, 1));
 
-    fn at(x: i32, z: i32) -> Transform {
-        Transform::from_xyz(x as f32, 0.0, z as f32)
-    }
+    cmds.spawn_bundle((ImpSpawnPoint, at(0, 0)));
 }

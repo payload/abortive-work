@@ -48,7 +48,7 @@ pub struct CameraSpawn<'w, 's> {
 }
 
 impl<'w, 's> CameraSpawn<'w, 's> {
-    pub fn spawn(&mut self) -> Entity {
+    pub fn spawn(&mut self, center: Vec3) -> Entity {
         let Self { cmds, .. } = self;
         cmds.spawn().insert(DirectionalLight::new(
             Color::WHITE,
@@ -57,7 +57,8 @@ impl<'w, 's> CameraSpawn<'w, 's> {
         ));
 
         cmds.spawn_bundle(PerspectiveCameraBundle {
-            transform: Transform::from_xyz(0.0, 10.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(center.x, 10.0, center.z - 5.0)
+                .looking_at(Vec3::ZERO, Vec3::Y),
             ..Default::default()
         })
         .insert_bundle(PickingCameraBundle::default())

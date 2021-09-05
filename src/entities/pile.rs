@@ -91,7 +91,11 @@ pub struct StoreIntoPile {
     pub pile: Entity,
 }
 
-fn store_into_pile(stores: Query<(Entity, &StoreIntoPile)>, mut piles: Query<&mut Pile>, mut cmds: Commands) {
+fn store_into_pile(
+    stores: Query<(Entity, &StoreIntoPile)>,
+    mut piles: Query<&mut Pile>,
+    mut cmds: Commands,
+) {
     for (store_entity, store) in stores.iter() {
         cmds.entity(store_entity).despawn_recursive();
 
