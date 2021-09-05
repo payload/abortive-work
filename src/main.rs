@@ -104,7 +104,7 @@ fn spawn_level_1(
         .insert(CameraTracking::new(0.0, 10.0, -3.0));
     camera.spawn(center);
 
-    storage.spawn(Storage::new(), at(0, -1));
+    //storage.spawn(Storage::new(), at(0, -1));
 
     fireplace.spawn(Fireplace::new(), at(0, 0));
 

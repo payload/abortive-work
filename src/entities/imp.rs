@@ -3,7 +3,10 @@ use std::f32::consts::TAU;
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 use bevy_mod_picking::PickableBundle;
 
-use crate::systems::{FunnyAnimation, Store, Thing};
+use crate::{
+    entities::StoreIntoPile,
+    systems::{FunnyAnimation, Store, Thing},
+};
 
 use super::Boulder;
 
@@ -323,6 +326,20 @@ fn update_imp(
                 if imp.idle_new_direction_time >= 1.0 {
                     imp.idle_new_direction_time = imp.idle_new_direction_time.fract();
                     imp.walk_destination = WalkDestination::Vec3(pos + random_vec());
+
+                    if imp.load_amount > 0.0 {
+                        cmds.spawn_bundle((
+                            StoreIntoPile {
+                                load: imp.load.unwrap(),
+                                amount: imp.load_amount,
+                                pile: None,
+                            },
+                            transform.clone(),
+                        ));
+
+                        imp.load_amount = 0.0;
+                        imp.load = None;
+                    }
                 }
 
                 imp.idle_time += dt;

@@ -88,25 +88,52 @@ fn load_assets(
 pub struct StoreIntoPile {
     pub load: Thing,
     pub amount: f32,
-    pub pile: Entity,
+    pub pile: Option<Entity>,
 }
 
 fn store_into_pile(
-    stores: Query<(Entity, &StoreIntoPile)>,
-    mut piles: Query<&mut Pile>,
+    stores: Query<(Entity, &StoreIntoPile, Option<&Transform>)>,
+    mut piles: Query<(&mut Pile, &Transform)>,
     mut cmds: Commands,
+    mut pile_spawn: PileSpawn,
 ) {
-    for (store_entity, store) in stores.iter() {
+    for (store_entity, store, store_transform) in stores.iter() {
         cmds.entity(store_entity).despawn_recursive();
 
-        if let Ok(mut pile) = piles.get_mut(store.pile) {
-            if pile.amount == 0.0 {
-                pile.load = store.load;
-                pile.amount = store.amount;
-            } else if pile.amount > 0.0 && pile.load == store.load {
-                pile.amount += store.amount;
-            } else {
-                // TODO create another pile
+        if let Some(store_pile) = store.pile {
+            if let Ok((mut pile, _)) = piles.get_mut(store_pile) {
+                if pile.amount == 0.0 {
+                    pile.load = store.load;
+                    pile.amount = store.amount;
+                } else if pile.amount > 0.0 && pile.load == store.load {
+                    pile.amount += store.amount;
+                } else {
+                    // TODO create another pile
+                }
+            }
+        } else if let Some(store_transform) = store_transform {
+            let mut stored = false;
+
+            'find_pile: for (mut pile, pile_transform) in piles.iter_mut() {
+                let dist = pile_transform
+                    .translation
+                    .distance_squared(store_transform.translation);
+                if dist < 1.0 {
+                    if pile.amount == 0.0 {
+                        pile.load = store.load;
+                        pile.amount = store.amount;
+                        stored = true;
+                        break 'find_pile;
+                    } else if pile.amount > 0.0 && pile.load == store.load {
+                        pile.amount += store.amount;
+                        stored = true;
+                        break 'find_pile;
+                    }
+                }
+            }
+
+            if !stored {
+                pile_spawn.spawn(Pile::new(store.load, store.amount), store_transform.clone());
             }
         }
     }
