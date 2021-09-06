@@ -27,6 +27,9 @@ pub use fireplace::*;
 mod pile;
 pub use pile::*;
 
+mod conveyor;
+pub use conveyor::*;
+
 pub struct NotGround;
 pub struct Blocking;
 
@@ -41,6 +44,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(MagePlugin)
             .add_plugin(FireplacePlugin)
             .add_plugin(PilePlugin)
+            .add_plugin(ConveyorPlugin)
             .add_plugin(GroundPlugin);
     }
 }

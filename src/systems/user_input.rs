@@ -31,7 +31,51 @@ impl Plugin for UserInputPlugin {
             .add_system(click_imp)
             .add_system(click_smithery)
             .add_system(player_movement)
+            .add_system(update_player)
             .insert_resource(UiState::default());
+    }
+}
+
+enum PlayerUiState {
+    None,
+    ConveyorFromSet(Entity, Vec3),
+}
+
+impl Default for PlayerUiState {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+fn update_player(
+    input: Res<Input<KeyCode>>,
+    mut conveyor: ConveyorSpawn,
+    mut state: Local<PlayerUiState>,
+    mage: Query<(Entity, &Transform), With<Mage>>,
+    mut cmds: Commands,
+) {
+    use PlayerUiState::*;
+
+    let (mage_entity, mage_transform) = mage.single().unwrap();
+
+    match *state {
+        None => {
+            if input.just_pressed(KeyCode::C) {
+                let line = conveyor
+                    .ghostline_from_point_to_entity(mage_transform.translation, mage_entity);
+                *state = ConveyorFromSet(line, mage_transform.translation);
+            }
+        }
+        ConveyorFromSet(line, from) => {
+            if input.just_pressed(KeyCode::C) {
+                cmds.entity(line).despawn_recursive();
+                conveyor.spawn_line(from, mage_transform.translation);
+                *state = None;
+            } else if input.just_pressed(KeyCode::Q) {
+                cmds.entity(line).despawn_recursive();
+                *state = None;
+            }
+        }
     }
 }
 

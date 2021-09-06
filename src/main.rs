@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{math::vec3, prelude::*};
 
 mod entities;
 use entities::*;
@@ -44,11 +44,11 @@ fn spawn_level_1(
     mut boulder: BoulderSpawn,
     mut smithery: SmitherySpawn,
     mut imp: ImpSpawn,
-    mut storage: StorageSpawn,
     mut mage: MageSpawn,
     mut camera: CameraSpawn,
     mut fireplace: FireplaceSpawn,
     mut pile: PileSpawn,
+    mut conveyor: ConveyorSpawn,
     mut cmds: Commands,
 ) {
     use BoulderMaterial::*;
@@ -104,11 +104,14 @@ fn spawn_level_1(
         .insert(CameraTracking::new(0.0, 10.0, -3.0));
     camera.spawn(center);
 
-    //storage.spawn(Storage::new(), at(0, -1));
-
     fireplace.spawn(Fireplace::new(), at(0, 0));
 
     pile.spawn(Pile::new(Thing::Coal, 1.0), at(0, 1));
+
+    conveyor.spawn_line(
+        center + vec3(-4.0, 0.0, -3.0),
+        center + vec3(4.0, 0.0, -3.0),
+    );
 
     cmds.spawn_bundle((ImpSpawnPoint, at(0, 0)));
 }
