@@ -108,10 +108,5 @@ fn spawn_level_1(
 
     pile.spawn(Pile::new(Thing::Coal, 1.0), at(0, 1));
 
-    conveyor.spawn_line(
-        center + vec3(-4.0, 0.0, -3.0),
-        center + vec3(4.0, 0.0, -3.0),
-    );
-
     cmds.spawn_bundle((ImpSpawnPoint, at(0, 0)));
 }
