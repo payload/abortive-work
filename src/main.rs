@@ -1,4 +1,4 @@
-use bevy::{math::vec3, prelude::*};
+use bevy::prelude::*;
 
 mod entities;
 use entities::*;
@@ -48,7 +48,6 @@ fn spawn_level_1(
     mut camera: CameraSpawn,
     mut fireplace: FireplaceSpawn,
     mut pile: PileSpawn,
-    mut conveyor: ConveyorSpawn,
     mut cmds: Commands,
 ) {
     use BoulderMaterial::*;
