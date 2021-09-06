@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use bevy::{
     ecs::system::{EntityCommands, SystemParam},
     prelude::*,
@@ -27,10 +29,14 @@ impl Plugin for ConveyorPlugin {
 pub struct ConveyorSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, ConveyorAssets>,
+    conveyors: Query<'w, 's, &'static Transform, With<Conveyor>>,
 }
 
 impl<'w, 's> ConveyorSpawn<'w, 's> {
     pub fn spawn_line<'a>(&'a mut self, from: Vec3, to: Vec3) {
+        let from = self.snap_to_conveyor(from);
+        let to = self.snap_to_conveyor(to);
+
         for (pos, angle) in Self::spawn_positions_at_line(from, to) {
             self.spawn(
                 Conveyor::new(),
@@ -41,6 +47,22 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                 },
             );
         }
+    }
+
+    pub fn snap_to_conveyor(&self, from: Vec3) -> Vec3 {
+        self.conveyors
+            .iter()
+            .map(|t| (t.translation, t.translation.distance_squared(from)))
+            .filter(|(_, d)| *d < 1.0)
+            .min_by(|(_, a), (_, b)| {
+                if a < b {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            })
+            .map(|(pos, _)| pos)
+            .unwrap_or(from)
     }
 
     pub fn ghostline_from_point_to_entity(&mut self, from: Vec3, to: Entity) -> Entity {
@@ -181,7 +203,10 @@ fn update_lines(
                     GlobalTransform::identity(),
                 ))
                 .id();
-            conveyor.spawn_ghostline(from_transform.translation, to_transform.translation, parent);
+
+            let from = conveyor.snap_to_conveyor(from_transform.translation);
+            let to = conveyor.snap_to_conveyor(to_transform.translation);
+            conveyor.spawn_ghostline(from, to, parent);
         }
     }
 }
