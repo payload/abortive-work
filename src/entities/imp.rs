@@ -5,7 +5,7 @@ use bevy_mod_picking::PickableBundle;
 
 use crate::{
     entities::StoreIntoPile,
-    systems::{FunnyAnimation, Store, Thing},
+    systems::{Destructable, FunnyAnimation, Store, Thing},
 };
 
 use super::Boulder;
@@ -134,6 +134,7 @@ impl<'w, 's> ImpSpawn<'w, 's> {
                 transform,
                 GlobalTransform::identity(),
                 ImpCommands::default(),
+                Destructable,
             ))
             .push_children(&[model]);
     }

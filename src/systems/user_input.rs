@@ -1,9 +1,6 @@
-use std::f32::consts::TAU;
-
 use bevy::{
     ecs::system::SystemParam,
     input::{keyboard::KeyboardInput, system::exit_on_esc_system, ElementState},
-    math::vec3,
     prelude::*,
 };
 use bevy_egui::*;
@@ -11,7 +8,7 @@ pub use bevy_mod_picking::*;
 
 use crate::entities::*;
 
-use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, Store, Thing};
+use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, Destructor, Store};
 
 pub struct UserInputPlugin;
 
@@ -23,7 +20,6 @@ impl Plugin for UserInputPlugin {
             .add_plugin(BuildingToolPlugin)
             .add_plugin(EguiPlugin)
             .add_system(exit_on_esc_system)
-            .add_system(spawn_imp_on_key)
             .add_system(make_pickable)
             .add_system(click_boulder)
             .add_system(interact_ground)
@@ -36,44 +32,210 @@ impl Plugin for UserInputPlugin {
     }
 }
 
-enum PlayerUiState {
-    None,
-    ConveyorFromSet(Entity, Vec3),
+#[derive(Debug)]
+struct UiState {
+    mode: UiMode,
+    build_tool_state: BuildToolState,
 }
 
-impl Default for PlayerUiState {
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum UiMode {
+    None,
+    BuildTool,
+    BuildConveyorTool,
+    Destructor,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Build {
+    Boulder,
+    Conveyor,
+    Imp,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            mode: Default::default(),
+            build_tool_state: BuildToolState {
+                build: Build::Boulder,
+                boulder_kind: BoulderMaterial::Stone,
+                start_line: None,
+            },
+        }
+    }
+}
+
+impl Default for UiMode {
     fn default() -> Self {
         Self::None
     }
 }
 
+impl Default for Build {
+    fn default() -> Self {
+        Build::Boulder
+    }
+}
+
+trait BackAndForth: Sized + Eq + Copy + std::fmt::Debug {
+    fn elems(&self) -> &[Self];
+
+    fn prev(&self) -> Self {
+        let elems = self.elems();
+        let pos = elems.iter().position(|e| e == self).unwrap_or(0);
+        if pos == 0 {
+            *elems.last().unwrap()
+        } else {
+            *elems.get(pos - 1).unwrap()
+        }
+    }
+
+    fn next(&self) -> Self {
+        let elems = self.elems();
+        *elems
+            .iter()
+            .position(|e| e == self)
+            .map(|pos| {
+                if pos == elems.len() - 1 {
+                    elems.first()
+                } else {
+                    elems.get(pos + 1)
+                }
+            })
+            .flatten()
+            .unwrap_or(self)
+    }
+}
+
+impl BackAndForth for Build {
+    fn elems(&self) -> &[Self] {
+        &BUILDS
+    }
+}
+
+impl BackAndForth for BoulderMaterial {
+    fn elems(&self) -> &[Self] {
+        &BOULDER_MATERIALS
+    }
+}
+
+const BUILDS: [Build; 3] = [Build::Boulder, Build::Conveyor, Build::Imp];
+const BOULDER_MATERIALS: [BoulderMaterial; 4] = [
+    BoulderMaterial::Stone,
+    BoulderMaterial::Coal,
+    BoulderMaterial::Iron,
+    BoulderMaterial::Gold,
+];
+
+#[derive(Debug)]
+struct BuildToolState {
+    build: Build,
+    boulder_kind: BoulderMaterial,
+    start_line: Option<(Entity, Vec3)>,
+}
+
+// J switches into build tool mode
+// in build tool mode
+//   JL switches build tool back and forth
+//   IK switches inside the build tool (material for example)
+//   E accepts or continues
+//   Q cancels
+
+// TODO follow this description for implementation
+
 fn update_player(
     input: Res<Input<KeyCode>>,
     mut conveyor: ConveyorSpawn,
-    mut state: Local<PlayerUiState>,
+    mut state: ResMut<UiState>,
     mage: Query<(Entity, &Transform), With<Mage>>,
     mut cmds: Commands,
+    //
+    mut imp: ImpSpawn,
+    mut boulder: BoulderSpawn,
+    mut destructor: Destructor,
 ) {
-    use PlayerUiState::*;
-
     let (mage_entity, mage_transform) = mage.single().unwrap();
 
-    match *state {
-        None => {
-            if input.just_pressed(KeyCode::C) {
-                let line = conveyor
-                    .ghostline_from_point_to_entity(mage_transform.translation, mage_entity);
-                *state = ConveyorFromSet(line, mage_transform.translation);
+    match state.mode {
+        UiMode::None => {
+            if input.just_pressed(KeyCode::J) {
+                state.mode = UiMode::BuildTool;
+            }
+            if input.just_pressed(KeyCode::L) {
+                state.mode = UiMode::Destructor;
             }
         }
-        ConveyorFromSet(line, from) => {
-            if input.just_pressed(KeyCode::C) {
-                cmds.entity(line).despawn_recursive();
-                conveyor.spawn_line(from, mage_transform.translation);
-                *state = None;
-            } else if input.just_pressed(KeyCode::Q) {
-                cmds.entity(line).despawn_recursive();
-                *state = None;
+        UiMode::Destructor => {
+            if input.just_pressed(KeyCode::E) {
+                destructor.destruct_one_near(mage_transform.translation);
+            }
+            if input.just_pressed(KeyCode::Q) {
+                state.build_tool_state.start_line = None;
+                state.mode = UiMode::None;
+            }
+        }
+        UiMode::BuildTool => {
+            if input.just_pressed(KeyCode::J) {
+                state.build_tool_state.build = state.build_tool_state.build.prev();
+            }
+            if input.just_pressed(KeyCode::L) {
+                state.build_tool_state.build = state.build_tool_state.build.next();
+            }
+            if input.just_pressed(KeyCode::Q) {
+                state.build_tool_state.start_line = None;
+                state.mode = UiMode::None;
+            }
+
+            match state.build_tool_state.build {
+                Build::Boulder => {
+                    if input.just_pressed(KeyCode::I) {
+                        state.build_tool_state.boulder_kind =
+                            state.build_tool_state.boulder_kind.prev();
+                    }
+                    if input.just_pressed(KeyCode::K) {
+                        state.build_tool_state.boulder_kind =
+                            state.build_tool_state.boulder_kind.next();
+                    }
+                    if input.just_pressed(KeyCode::E) {
+                        boulder.spawn(
+                            Boulder::new(state.build_tool_state.boulder_kind),
+                            mage_transform.clone(),
+                        );
+                    }
+                }
+                Build::Conveyor => {
+                    if input.just_pressed(KeyCode::E) {
+                        let line = conveyor.ghostline_from_point_to_entity(
+                            mage_transform.translation,
+                            mage_entity,
+                        );
+                        state.build_tool_state.start_line =
+                            Some((line, mage_transform.translation));
+                        state.mode = UiMode::BuildConveyorTool;
+                    }
+                }
+                Build::Imp => {
+                    if input.just_pressed(KeyCode::E) {
+                        imp.spawn(Imp::new(), mage_transform.clone());
+                    }
+                }
+            }
+        }
+        UiMode::BuildConveyorTool => {
+            if input.just_pressed(KeyCode::Q) {
+                if let Some((line, _)) = state.build_tool_state.start_line {
+                    cmds.entity(line).despawn_recursive();
+                    state.build_tool_state.start_line = None;
+                }
+                state.mode = UiMode::BuildTool;
+            } else if input.just_pressed(KeyCode::E) {
+                if let Some((line, from)) = state.build_tool_state.start_line {
+                    cmds.entity(line).despawn_recursive();
+                    conveyor.spawn_line(from, mage_transform.translation);
+                    state.build_tool_state.start_line = None;
+                }
+                state.mode = UiMode::BuildTool;
             }
         }
     }
@@ -111,29 +273,6 @@ fn player_movement(
     if let Ok(mut transform) = query.single_mut() {
         if control != Vec3::ZERO {
             transform.translation += control.normalize_or_zero() * speed * dt;
-        }
-    }
-}
-
-pub struct ImpSpawnPoint;
-
-fn spawn_imp_on_key(
-    mut imp: ImpSpawn,
-    mut keyboard_input_events: EventReader<KeyboardInput>,
-    spawn_point: Query<&Transform, With<ImpSpawnPoint>>,
-) {
-    let spawn_point = spawn_point
-        .single()
-        .map(|t| t.translation)
-        .unwrap_or(Vec3::ZERO);
-
-    for event in keyboard_input_events.iter() {
-        if let Some(key_code) = event.key_code {
-            if event.state == ElementState::Pressed && key_code == KeyCode::I {
-                let a = TAU * fastrand::f32();
-                let vec = vec3(a.cos(), 0.0, a.sin());
-                imp.spawn(Imp::new(), Transform::from_translation(vec + spawn_point));
-            }
         }
     }
 }
@@ -285,30 +424,61 @@ fn interact_ground(
     }
 }
 
-#[derive(Default)]
-struct UiState {
-    thing: Option<Thing>,
-}
+// #[derive(Default)]
+// struct UiState {
+//     thing: Option<Thing>,
+// }
 
-fn example_ui(mut state: ResMut<UiState>, egui_ctx: Res<EguiContext>, details: Details) {
-    let mut thing_copy = state.thing;
-    let thing = &mut thing_copy;
+fn example_ui(state: ResMut<UiState>, egui_ctx: Res<EguiContext>, details: Details) {
+    // let mut thing_copy = state.thing;
+    // let thing = &mut thing_copy;
 
     egui::Window::new("Thing")
         .scroll(true)
         .default_width(200.0)
         .default_pos((0.0, 0.0))
         .show(egui_ctx.ctx(), |ui| {
-            ui.selectable_value(thing, Some(Thing::Stone), "Stone");
-            ui.selectable_value(thing, Some(Thing::Coal), "Coal");
-            ui.selectable_value(thing, Some(Thing::Iron), "Iron");
-            ui.selectable_value(thing, Some(Thing::Gold), "Gold");
-            ui.selectable_value(thing, Some(Thing::Tool), "Tool");
+            // ui.selectable_value(thing, Some(Thing::Stone), "Stone");
+            // ui.selectable_value(thing, Some(Thing::Coal), "Coal");
+            // ui.selectable_value(thing, Some(Thing::Iron), "Iron");
+            // ui.selectable_value(thing, Some(Thing::Gold), "Gold");
+            // ui.selectable_value(thing, Some(Thing::Tool), "Tool");
+
+            ui.label(format!("mode: {:?}", state.mode));
+
+            match state.mode {
+                UiMode::None => {
+                    ui.label("Press J to build, L to destruct.");
+                }
+                UiMode::BuildTool => match state.build_tool_state.build {
+                    Build::Boulder => {
+                        let material = state.build_tool_state.boulder_kind;
+                        ui.label(format!(
+                            "{:?} {:?}. Press E to build, Q to cancel.",
+                            material,
+                            Build::Boulder
+                        ));
+                    }
+                    Build::Conveyor => {
+                        ui.label(format!(
+                            "{:?}. Press E to start a belt, Q to cancel.",
+                            Build::Conveyor
+                        ));
+                    }
+                    Build::Imp => {
+                        ui.label(format!("{:?}. Press E to spawn, Q to cancel.", Build::Imp));
+                    }
+                },
+                UiMode::Destructor => {
+                    ui.label("Press E to destruct something near, Q to cancel.");
+                }
+                UiMode::BuildConveyorTool => {
+                    ui.label("Press E to build the belt, Q to cancel.");
+                }
+            }
 
             details.add_to_ui(ui);
         });
-
-    state.thing = thing_copy;
 }
 
 #[derive(SystemParam)]

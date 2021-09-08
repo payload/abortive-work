@@ -5,6 +5,8 @@ use bevy::{
     prelude::*,
 };
 
+use crate::systems::Destructable;
+
 use super::NotGround;
 
 #[derive(Default)]
@@ -128,9 +130,12 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
         transform: Transform,
     ) -> EntityCommands<'w, 's, 'a> {
         let model = self.model(self.assets.material.clone());
-        let mut entity_cmds =
-            self.cmds
-                .spawn_bundle((conveyor, transform, GlobalTransform::identity()));
+        let mut entity_cmds = self.cmds.spawn_bundle((
+            conveyor,
+            transform,
+            GlobalTransform::identity(),
+            Destructable,
+        ));
         entity_cmds.push_children(&[model]);
         entity_cmds
     }

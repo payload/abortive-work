@@ -21,3 +21,6 @@ pub use augmentation::*;
 
 mod map_gen;
 pub use map_gen::*;
+
+mod destructor;
+pub use destructor::*;

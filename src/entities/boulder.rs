@@ -2,6 +2,8 @@ use std::f32::consts::PI;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
+use crate::systems::Destructable;
+
 use super::{Blocking, MageInteractable, NotGround};
 
 #[derive(Clone)]
@@ -87,6 +89,7 @@ impl<'w, 's> BoulderSpawn<'w, 's> {
                 transform,
                 GlobalTransform::identity(),
                 MageInteractable::default(),
+                Destructable,
             ))
             .push_children(&[model]);
     }

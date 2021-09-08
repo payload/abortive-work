@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::systems::disk;
+use crate::systems::{disk, Destructable};
 
 use super::{MageInteractable, NotGround};
 
@@ -52,6 +52,7 @@ impl<'w, 's> FireplaceSpawn<'w, 's> {
             transform,
             GlobalTransform::identity(),
             MageInteractable::default(),
+            Destructable,
         ));
         entity_cmds.push_children(&[model]);
         entity_cmds

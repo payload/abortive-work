@@ -97,6 +97,7 @@ impl<'w, 's> SmitherySpawn<'w, 's> {
                 smithery,
                 transform,
                 GlobalTransform::identity(),
+                Destructable,
                 Store::new(&[
                     StoreSlot::input(5.0, Thing::Coal.into()),
                     StoreSlot::input(5.0, Thing::Iron.into()),

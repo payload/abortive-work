@@ -48,7 +48,6 @@ fn spawn_level_1(
     mut camera: CameraSpawn,
     mut fireplace: FireplaceSpawn,
     mut pile: PileSpawn,
-    mut cmds: Commands,
 ) {
     use BoulderMaterial::*;
 
@@ -106,6 +105,4 @@ fn spawn_level_1(
     fireplace.spawn(Fireplace::new(), at(0, 0));
 
     pile.spawn(Pile::new(Thing::Coal, 1.0), at(0, 1));
-
-    cmds.spawn_bundle((ImpSpawnPoint, at(0, 0)));
 }

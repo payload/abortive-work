@@ -1,6 +1,6 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use crate::systems::{Store, StoreSlot, ThingFilter};
+use crate::systems::{Destructable, Store, StoreSlot, ThingFilter};
 
 use super::NotGround;
 
@@ -45,6 +45,7 @@ impl<'w, 's> StorageSpawn<'w, 's> {
                 transform,
                 GlobalTransform::identity(),
                 Store::new(&[StoreSlot::input(50.0, ThingFilter::None)]),
+                Destructable,
             ))
             .push_children(&[model]);
     }
