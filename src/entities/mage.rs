@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{Focus, Stack, Thing};
 
-use super::{Boulder, NotGround, Pile};
+use super::{Boulder, Conveyor, NotGround, Pile};
 
 #[derive(Default)]
 pub struct Mage {
@@ -39,6 +39,17 @@ impl Mage {
                 return;
             }
         }
+    }
+
+    pub fn take_first(&mut self, amount: f32) -> Option<Thing> {
+        for stack in self.inventory.iter_mut() {
+            if stack.amount >= amount {
+                stack.amount -= amount;
+                return stack.thing;
+            }
+        }
+
+        None
     }
 }
 
@@ -126,6 +137,7 @@ fn update(
     mut mages: Query<(&mut Mage, &Focus)>,
     mut boulder: Query<&mut Boulder>,
     mut pile: Query<&mut Pile>,
+    mut conveyor: Query<&mut Conveyor>,
 ) {
     for (mut mage, focus) in mages.iter_mut() {
         if mage.interact_with_focus {
@@ -135,12 +147,18 @@ fn update(
                 if let Ok(mut boulder) = boulder.get_mut(entity) {
                     boulder.marked_for_digging = !boulder.marked_for_digging;
                 }
-            }
 
-            for mut pile in focus.entity.and_then(|e| pile.get_mut(e).ok()) {
-                if pile.amount >= 1.0 {
-                    pile.amount -= 1.0;
-                    mage.put_into_inventory(pile.load, 1.0);
+                if let Ok(mut pile) = pile.get_mut(entity) {
+                    if pile.amount >= 1.0 {
+                        pile.amount -= 1.0;
+                        mage.put_into_inventory(pile.load, 1.0);
+                    }
+                }
+
+                if let Ok(mut conveyor) = conveyor.get_mut(entity) {
+                    if let Some(thing) = mage.take_first(1.0) {
+                        conveyor.store(thing, 1.0);
+                    }
                 }
             }
         }

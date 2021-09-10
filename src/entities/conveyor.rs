@@ -5,16 +5,22 @@ use bevy::{
     prelude::*,
 };
 
-use crate::systems::{Destructable, FocusObject};
+use crate::systems::{Destructable, FocusObject, Thing};
 
 use super::NotGround;
 
 #[derive(Default)]
-pub struct Conveyor {}
+pub struct Conveyor {
+    marked_for_thing: Option<Thing>,
+}
 
 impl Conveyor {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn store(&mut self, thing: Thing, _amount: f32) {
+        self.marked_for_thing = Some(thing);
     }
 }
 
