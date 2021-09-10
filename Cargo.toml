@@ -16,7 +16,7 @@ bevy_mod_picking = {git = "https://github.com/JulianRuiseco/bevy_mod_picking"}
 big-brain = {git = "https://github.com/payload/big-brain.git"}
 
 [patch.'https://github.com/bevyengine/bevy']
-bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "62e4e59a"}
+bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "27bfbda7bc76e4196962926e3541ca2ca24b7f53"}
 
 [patch.'crates-io']
-bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "62e4e59a"}
+bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "27bfbda7bc76e4196962926e3541ca2ca24b7f53"}

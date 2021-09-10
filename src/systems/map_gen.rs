@@ -1747,6 +1747,7 @@ pub fn generate_planetary_noise_map() -> NoiseMap {
     noise_map
 }
 
+#[allow(dead_code)]
 pub fn render_noise_map_to_png(filename: &str, noise_map: &NoiseMap) {
     ImageRenderer::new()
         .set_gradient(ColorGradient::new().build_terrain_gradient())

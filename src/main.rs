@@ -59,8 +59,6 @@ fn spawn_level_1(
         .set_y_bounds(-2.0, 2.0)
         .build();
 
-    render_noise_map_to_png("map.png", &map);
-
     let (w, h) = map.size();
     let hx = -0.5 * w as f32;
     let hz = -0.5 * h as f32;

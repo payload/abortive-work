@@ -26,7 +26,7 @@ impl Plugin for UserInputPlugin {
             .add_system(example_ui)
             .add_system(click_imp)
             .add_system(click_smithery)
-            .add_system(update_mage_focus)
+            .add_system_to_stage(CoreStage::PostUpdate, update_mage_focus)
             .add_system(update_boulder_marked_for_digging)
             .add_system(player_movement)
             .add_system(update_player)
@@ -435,7 +435,12 @@ fn interact_ground(
 //     thing: Option<Thing>,
 // }
 
-fn example_ui(state: ResMut<UiState>, egui_ctx: Res<EguiContext>, details: Details) {
+fn example_ui(
+    state: Res<UiState>,
+    egui_ctx: Res<EguiContext>,
+    details: Details,
+    mut boulder_config: ResMut<BoulderConfig>,
+) {
     // let mut thing_copy = state.thing;
     // let thing = &mut thing_copy;
 
@@ -483,6 +488,19 @@ fn example_ui(state: ResMut<UiState>, egui_ctx: Res<EguiContext>, details: Detai
                 }
             }
 
+            ui.add_space(32.0);
+            let mut value = boulder_config.max_angle_deviation.to_degrees();
+            ui.add(
+                egui::Slider::new(&mut value, 0.0..=45.0)
+                    .integer()
+                    .text("Boulder max angle deviation"),
+            );
+            let value = value.to_radians();
+            if boulder_config.max_angle_deviation != value {
+                boulder_config.max_angle_deviation = value;
+            }
+
+            ui.add_space(32.0);
             details.add_to_ui(ui);
         });
 }
@@ -540,15 +558,20 @@ impl<'w, 's> Details<'w, 's> {
 
 fn update_mage_focus(
     query: Query<&Focus, (With<Mage>, Changed<Focus>)>,
+    entities: Query<Entity>,
     mut augment: AugmentSpawn,
 ) {
     for focus in query.iter() {
         if let Some(entity) = focus.entity {
-            augment.add_coin(entity);
+            if entities.get(entity).is_ok() {
+                augment.add_coin(entity);
+            }
         }
 
         if let Some(entity) = focus.before {
-            augment.remove_coin(entity);
+            if entities.get(entity).is_ok() {
+                augment.remove_coin(entity);
+            }
         }
     }
 }

@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::systems::{Destructable, FocusObject};
@@ -45,7 +43,21 @@ pub struct BoulderPlugin;
 
 impl Plugin for BoulderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, load_boulder_assets);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, load_boulder_assets)
+            .add_system_to_stage(CoreStage::PreUpdate, update_boulder_config)
+            .init_resource::<BoulderConfig>();
+    }
+}
+
+pub struct BoulderConfig {
+    pub max_angle_deviation: f32,
+}
+
+impl Default for BoulderConfig {
+    fn default() -> Self {
+        Self {
+            max_angle_deviation: 8.0_f32.to_radians(),
+        }
     }
 }
 
@@ -53,22 +65,23 @@ impl Plugin for BoulderPlugin {
 pub struct BoulderSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, BoulderAssets>,
+    config: Res<'w, BoulderConfig>,
 }
 
 impl<'w, 's> BoulderSpawn<'w, 's> {
     pub fn spawn(&mut self, boulder: Boulder, mut transform: Transform) {
-        let mut deeper_transform = self.assets.transform.clone();
-        deeper_transform.translation.y -= 0.2 * fastrand::f32();
-
+        transform.translation.y = -0.2 * fastrand::f32();
         transform.rotate(
-            Quat::from_rotation_z(0.125 * PI * (0.5 - fastrand::f32()))
-                .mul_quat(Quat::from_rotation_x(0.125 * PI * (0.5 - fastrand::f32()))),
+            Quat::from_rotation_z(self.config.max_angle_deviation * (0.5 - fastrand::f32()))
+                .mul_quat(Quat::from_rotation_x(
+                    self.config.max_angle_deviation * (0.5 - fastrand::f32()),
+                )),
         );
 
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
-                transform: deeper_transform,
+                transform: self.assets.transform,
                 material: match boulder.material {
                     BoulderMaterial::Stone => self.assets.stone.clone(),
                     BoulderMaterial::Coal => self.assets.coal.clone(),
@@ -115,5 +128,22 @@ fn load_boulder_assets(
             base_color: color,
             ..Default::default()
         }
+    }
+}
+
+fn update_boulder_config(
+    config: Res<BoulderConfig>,
+    boulders: Query<(Entity, &Boulder, &Transform)>,
+    mut spawn: BoulderSpawn,
+    mut cmds: Commands,
+) {
+    if !config.is_changed() {
+        return;
+    }
+
+    for (entity, boulder, transform) in boulders.iter() {
+        let transform = Transform::from_translation(transform.translation);
+        spawn.spawn(boulder.clone(), transform);
+        cmds.entity(entity).despawn_recursive();
     }
 }

@@ -14,7 +14,7 @@ pub struct FocusPlugin;
 
 impl Plugin for FocusPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_to_stage(CoreStage::PreUpdate, update_focus);
+        app.add_system_to_stage(CoreStage::Update, update_focus);
     }
 }
 
