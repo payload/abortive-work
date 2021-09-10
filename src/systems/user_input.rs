@@ -514,28 +514,28 @@ pub struct Details<'w, 's> {
 
 impl<'w, 's> Details<'w, 's> {
     fn add_to_ui(&self, ui: &mut egui::Ui) {
-        for imp in self
+        for _imp in self
             .models
             .iter()
             .filter(|(_, selection)| selection.selected())
             .filter_map(|(parent, _)| self.imps.get(**parent).ok())
         {
-            let desc = format!(
-                "{name} {does_something}{and_carries}.",
-                name = "imp",
-                does_something = match imp.behavior {
-                    ImpBehavior::Idle => "does nothing",
-                    ImpBehavior::Dig => "diggs",
-                    ImpBehavior::Store => "stores",
-                    ImpBehavior::Follow(_) => "follows",
-                },
-                and_carries = match imp.load {
-                    Some(load) => format!(" and carries {:.1} {:?}", imp.load_amount, load),
-                    None => String::new(),
-                }
-            );
+            // let desc = format!(
+            //     "{name} {does_something}{and_carries}.",
+            //     name = "imp",
+            //     does_something = match imp.behavior {
+            //         ImpBehavior::Idle => "does nothing",
+            //         ImpBehavior::Dig => "diggs",
+            //         ImpBehavior::Store => "stores",
+            //         ImpBehavior::Follow(_) => "follows",
+            //     },
+            //     and_carries = match imp.load {
+            //         Some(load) => format!(" and carries {:.1} {:?}", imp.load_amount, load),
+            //         None => String::new(),
+            //     }
+            // );
 
-            ui.label(desc);
+            // ui.label(desc);
         }
 
         for mage in self.mage.single() {
