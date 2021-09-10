@@ -10,8 +10,8 @@ use crate::systems::{cone, Destructable, FocusObject, Thing};
 use super::{MageInteractable, NotGround};
 
 pub struct Pile {
-    load: Thing,
-    amount: f32,
+    pub load: Thing,
+    pub amount: f32,
 }
 
 impl Pile {
@@ -26,7 +26,8 @@ impl Plugin for PilePlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system(store_into_pile)
-            .add_system(update_pile);
+            .add_system(update_pile)
+            .add_system_to_stage(CoreStage::Last, despawn_empty_piles);
     }
 }
 
@@ -150,6 +151,14 @@ fn update_pile(mut piles: Query<(&Pile, &mut Transform), Changed<Pile>>) {
         let scale = Vec3::new(h, h, h);
         if transform.scale != scale {
             transform.scale = scale;
+        }
+    }
+}
+
+fn despawn_empty_piles(piles: Query<(Entity, &Pile)>, mut cmds: Commands) {
+    for (entity, pile) in piles.iter() {
+        if pile.amount <= 0.0 {
+            cmds.entity(entity).despawn_recursive();
         }
     }
 }

@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{Focus, Stack, Thing};
 
-use super::{Boulder, NotGround};
+use super::{Boulder, NotGround, Pile};
 
 #[derive(Default)]
 pub struct Mage {
@@ -122,7 +122,11 @@ pub struct MageInteractable {
     pub near: bool,
 }
 
-fn update(mut mages: Query<(&mut Mage, &Focus)>, mut boulder: Query<&mut Boulder>) {
+fn update(
+    mut mages: Query<(&mut Mage, &Focus)>,
+    mut boulder: Query<&mut Boulder>,
+    mut pile: Query<&mut Pile>,
+) {
     for (mut mage, focus) in mages.iter_mut() {
         if mage.interact_with_focus {
             mage.interact_with_focus = false;
@@ -130,6 +134,13 @@ fn update(mut mages: Query<(&mut Mage, &Focus)>, mut boulder: Query<&mut Boulder
             if let Some(entity) = focus.entity {
                 if let Ok(mut boulder) = boulder.get_mut(entity) {
                     boulder.marked_for_digging = !boulder.marked_for_digging;
+                }
+            }
+
+            for mut pile in focus.entity.and_then(|e| pile.get_mut(e).ok()) {
+                if pile.amount >= 1.0 {
+                    pile.amount -= 1.0;
+                    mage.put_into_inventory(pile.load, 1.0);
                 }
             }
         }
