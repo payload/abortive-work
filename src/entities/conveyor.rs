@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::systems::Destructable;
+use crate::systems::{Destructable, FocusObject};
 
 use super::NotGround;
 
@@ -135,6 +135,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
             transform,
             GlobalTransform::identity(),
             Destructable,
+            FocusObject,
         ));
         entity_cmds.push_children(&[model]);
         entity_cmds
