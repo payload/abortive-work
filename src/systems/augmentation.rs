@@ -84,7 +84,7 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
             .id();
 
         let mut entity_cmds = self.cmds.spawn_bundle((
-            Transform::from_xyz(0.0, 1.0, 0.0),
+            Transform::from_xyz(0.0, 2.0, 0.0),
             GlobalTransform::identity(),
         ));
         entity_cmds.push_children(&[model]).insert(CoinAnimation);
@@ -132,7 +132,7 @@ fn load_assets(
         coin_material: materials.add(color_material(Color::ORANGE)),
         coin_mesh: meshes.add(shape::Box::new(0.2, 0.0, 0.2).into()),
 
-        pedestal_transform: Transform::identity(),
+        pedestal_transform: Transform::from_xyz(0.0, 0.05, 0.0),
         pedestal_material: materials.add(color_material(Color::ANTIQUE_WHITE)),
         pedestal_mesh: meshes.add(disk(0.9, 24)),
     });

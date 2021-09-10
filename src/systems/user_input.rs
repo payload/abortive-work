@@ -8,7 +8,7 @@ pub use bevy_mod_picking::*;
 
 use crate::entities::*;
 
-use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, Destructor, Store};
+use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, Destructor, Focus, Store};
 
 pub struct UserInputPlugin;
 
@@ -26,6 +26,8 @@ impl Plugin for UserInputPlugin {
             .add_system(example_ui)
             .add_system(click_imp)
             .add_system(click_smithery)
+            .add_system(update_mage_focus)
+            .add_system(update_boulder_marked_for_digging)
             .add_system(player_movement)
             .add_system(update_player)
             .insert_resource(UiState::default());
@@ -148,14 +150,14 @@ fn update_player(
     input: Res<Input<KeyCode>>,
     mut conveyor: ConveyorSpawn,
     mut state: ResMut<UiState>,
-    mage: Query<(Entity, &Transform), With<Mage>>,
+    mut mage: Query<(Entity, &Transform, &mut Mage, &Focus), With<Mage>>,
     mut cmds: Commands,
     //
     mut imp: ImpSpawn,
     mut boulder: BoulderSpawn,
     mut destructor: Destructor,
 ) {
-    let (mage_entity, mage_transform) = mage.single().unwrap();
+    let (mage_entity, mage_transform, mut mage, focus) = mage.single_mut().unwrap();
 
     match state.mode {
         UiMode::None => {
@@ -165,10 +167,13 @@ fn update_player(
             if input.just_pressed(KeyCode::L) {
                 state.mode = UiMode::Destructor;
             }
+            if input.just_pressed(KeyCode::E) {
+                mage.interact_with_focus = true;
+            }
         }
         UiMode::Destructor => {
             if input.just_pressed(KeyCode::E) {
-                destructor.destruct_one_near(mage_transform.translation);
+                destructor.destruct_some(focus.entity);
             }
             if input.just_pressed(KeyCode::Q) {
                 state.build_tool_state.start_line = None;
@@ -273,6 +278,7 @@ fn player_movement(
     if let Ok(mut transform) = query.single_mut() {
         if control != Vec3::ZERO {
             transform.translation += control.normalize_or_zero() * speed * dt;
+            transform.rotation = Quat::from_rotation_y(control.x.atan2(control.z));
         }
     }
 }
@@ -529,5 +535,29 @@ impl<'w, 's> Details<'w, 's> {
 
             ui.label(desc);
         }
+    }
+}
+
+fn update_mage_focus(
+    query: Query<&Focus, (With<Mage>, Changed<Focus>)>,
+    mut augment: AugmentSpawn,
+) {
+    for focus in query.iter() {
+        if let Some(entity) = focus.entity {
+            augment.add_coin(entity);
+        }
+
+        if let Some(entity) = focus.before {
+            augment.remove_coin(entity);
+        }
+    }
+}
+
+fn update_boulder_marked_for_digging(
+    query: Query<(Entity, &Boulder), Changed<Boulder>>,
+    mut augment: AugmentSpawn,
+) {
+    for (boulder_entity, boulder) in query.iter() {
+        augment.with_pedestal(boulder_entity, boulder.marked_for_digging);
     }
 }

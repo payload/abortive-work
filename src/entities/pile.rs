@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::systems::{cone, Destructable, Thing};
+use crate::systems::{cone, Destructable, FocusObject, Thing};
 
 use super::{MageInteractable, NotGround};
 
@@ -55,6 +55,7 @@ impl<'w, 's> PileSpawn<'w, 's> {
             GlobalTransform::identity(),
             MageInteractable::default(),
             Destructable,
+            FocusObject,
         ));
         entity_cmds.push_children(&[model]);
         entity_cmds

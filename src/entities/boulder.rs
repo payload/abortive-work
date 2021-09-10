@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use crate::systems::Destructable;
+use crate::systems::{Destructable, FocusObject};
 
 use super::{Blocking, MageInteractable, NotGround};
 
@@ -90,6 +90,7 @@ impl<'w, 's> BoulderSpawn<'w, 's> {
                 GlobalTransform::identity(),
                 MageInteractable::default(),
                 Destructable,
+                FocusObject,
             ))
             .push_children(&[model]);
     }

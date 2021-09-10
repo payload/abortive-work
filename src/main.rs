@@ -18,6 +18,7 @@ fn main() {
         .add_plugin(UserInputPlugin)
         .add_plugin(CameraPlugin)
         .add_plugin(AugmentationPlugin)
+        .add_plugin(FocusPlugin)
         .add_startup_system(spawn_level_1)
         .run();
 

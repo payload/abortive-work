@@ -5,13 +5,14 @@ use bevy::{
     prelude::*,
 };
 
-use crate::systems::{AugmentSpawn, Stack, Thing};
+use crate::systems::{Focus, Stack, Thing};
 
-use super::NotGround;
+use super::{Boulder, NotGround};
 
 #[derive(Default)]
 pub struct Mage {
     pub inventory: Vec<Stack>,
+    pub interact_with_focus: bool,
 }
 
 impl Mage {
@@ -46,7 +47,7 @@ pub struct MagePlugin;
 impl Plugin for MagePlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system(update_mage_interactables);
+            .add_system(update);
     }
 }
 
@@ -69,9 +70,12 @@ impl<'w, 's> MageSpawn<'w, 's> {
             .insert(NotGround)
             .id();
 
-        let mut entity_cmds =
-            self.cmds
-                .spawn_bundle((mage, transform, GlobalTransform::identity()));
+        let mut entity_cmds = self.cmds.spawn_bundle((
+            mage,
+            transform,
+            GlobalTransform::identity(),
+            Focus::default(),
+        ));
         entity_cmds.push_children(&[model]);
         entity_cmds
     }
@@ -91,8 +95,8 @@ fn load_assets(
 ) {
     cmds.insert_resource(MageAssets {
         transform: Transform {
-            translation: Vec3::new(0.0, 0.25, 0.0),
-            rotation: Quat::from_rotation_y(-FRAC_PI_4),
+            translation: Vec3::new(0.0, 0.25, 0.05),
+            rotation: Quat::from_rotation_x(0.4) * Quat::from_rotation_y(-FRAC_PI_4),
             scale: Vec3::ONE,
         },
         material: materials.add(StandardMaterial {
@@ -105,7 +109,7 @@ fn load_assets(
         mesh: meshes.add(
             shape::Capsule {
                 latitudes: 16,
-                longitudes: 4,
+                longitudes: 8,
                 ..Default::default()
             }
             .into(),
@@ -118,33 +122,16 @@ pub struct MageInteractable {
     pub near: bool,
 }
 
-fn update_mage_interactables(
-    mages: Query<(&Transform, &Mage)>,
-    mut interactables: Query<(Entity, &Transform, &mut MageInteractable)>,
-    mut augment: AugmentSpawn,
-) {
-    let mut vec: Vec<_> = interactables
-        .iter_mut()
-        .map(|p| (p.0, p.1, p.2, false))
-        .collect();
+fn update(mut mages: Query<(&mut Mage, &Focus)>, mut boulder: Query<&mut Boulder>) {
+    for (mut mage, focus) in mages.iter_mut() {
+        if mage.interact_with_focus {
+            mage.interact_with_focus = false;
 
-    for (mage_transform, _mage) in mages.iter() {
-        let m_pos = mage_transform.translation;
-
-        for (_, t, _, near) in vec.iter_mut() {
-            if m_pos.distance_squared(t.translation) < 4.0 {
-                *near = true;
+            if let Some(entity) = focus.entity {
+                if let Ok(mut boulder) = boulder.get_mut(entity) {
+                    boulder.marked_for_digging = !boulder.marked_for_digging;
+                }
             }
-        }
-    }
-
-    for (e, _, act, near) in vec.iter_mut() {
-        if *near && !act.near {
-            act.near = true;
-            augment.add_coin(*e);
-        } else if !*near && act.near {
-            act.near = false;
-            augment.remove_coin(*e);
         }
     }
 }
