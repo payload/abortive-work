@@ -1,6 +1,10 @@
-use std::f32::consts::TAU;
+use std::{cmp::Ordering, f32::consts::TAU};
 
-use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
+use bevy::{
+    ecs::system::{EntityCommands, SystemParam},
+    math::vec3,
+    prelude::*,
+};
 use bevy_mod_picking::PickableBundle;
 
 use crate::{
@@ -8,7 +12,7 @@ use crate::{
     systems::{Destructable, FunnyAnimation, Store, Thing},
 };
 
-use super::Boulder;
+use super::{Boulder, PileSpawn};
 
 #[derive(Clone)]
 pub struct Imp {
@@ -22,6 +26,7 @@ pub struct Imp {
     pub target_boulder: Target,
     pub target_store: Target,
     pub want_to_follow: Option<Entity>,
+    pub idle_complete: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -80,6 +85,7 @@ impl Imp {
             target_boulder: Target::default(),
             target_store: Target::default(),
             want_to_follow: None,
+            idle_complete: false,
         }
     }
 
@@ -100,9 +106,10 @@ pub struct ImpPlugin;
 impl Plugin for ImpPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system(update_imp.label("imp"))
+            //.add_system(update_imp.label("imp"))
             .add_system(update_imp_commands)
-            .add_system(update_walk.after("imp"));
+            .add_system_to_stage(CoreStage::PostUpdate, update_walk)
+            .add_plugin(ImpBrainPlugin);
     }
 }
 
@@ -135,6 +142,7 @@ impl<'w, 's> ImpSpawn<'w, 's> {
                 GlobalTransform::identity(),
                 ImpCommands::default(),
                 Destructable,
+                brain(),
             ))
             .push_children(&[model]);
     }
@@ -403,11 +411,6 @@ fn update_imp(
             Idle
         }
     }
-
-    fn random_vec() -> Vec3 {
-        let a = TAU * fastrand::f32();
-        vec3(a.cos(), 0.0, a.sin())
-    }
 }
 
 fn update_walk(
@@ -464,4 +467,404 @@ fn update_imp_commands(mut imps: Query<(&mut Imp, &mut ImpCommands)>) {
             }
         }
     }
+}
+
+use big_brain::prelude::*;
+
+// imp can be Thirsty
+// he is as Thirsty as the Thirst tells
+
+struct ImpBrainPlugin;
+impl Plugin for ImpBrainPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(thirsty_scorer_system)
+            .add_system(drink_action_system)
+            .add_system(thirst_system)
+            .add_system(want_to_dig)
+            .add_system(want_to_drop)
+            .add_system(do_dig)
+            .add_system(do_drop)
+            .add_system(do_meander)
+            .add_plugin(BigBrainPlugin);
+    }
+}
+
+fn brain() -> ThinkerBuilder {
+    // when loaded and storable, store
+    // when unloaded and diggable, dig
+    // when loaded and not storable, unload
+    // default meander
+
+    Thinker::build()
+        .picker(FirstToScore { threshold: 0.8 })
+        .when(Thirsty::build(), Drink::build())
+        .when(WantToStoreBuilder, DoStoreBuilder)
+        .when(WantToDigBuilder, DoDigBuilder)
+        .when(WantToDropBuilder, DoDropBuilder)
+        .otherwise(DoMeanderBuilder)
+}
+
+struct WantToStore;
+struct WantToDig;
+struct WantToDrop;
+struct DoStore;
+struct DoDig;
+struct DoDrop;
+struct DoMeander;
+
+#[derive(Debug, Clone)]
+struct WantToStoreBuilder;
+impl ScorerBuilder for WantToStoreBuilder {
+    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+        cmd.entity(scorer).insert(WantToStore);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct WantToDigBuilder;
+impl ScorerBuilder for WantToDigBuilder {
+    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+        cmd.entity(scorer).insert(WantToDig);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct WantToDropBuilder;
+impl ScorerBuilder for WantToDropBuilder {
+    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+        cmd.entity(scorer).insert(WantToDrop);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DoStoreBuilder;
+impl ActionBuilder for DoStoreBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action).insert(DoStore);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DoDigBuilder;
+impl ActionBuilder for DoDigBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action).insert(DoDig);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DoDropBuilder;
+impl ActionBuilder for DoDropBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action).insert(DoDrop);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DoMeanderBuilder;
+impl ActionBuilder for DoMeanderBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action).insert(DoMeander);
+    }
+}
+
+////////
+
+fn want_to_drop(imps: Query<&Imp>, mut query: Query<(&Actor, &mut Score), With<WantToDrop>>) {
+    for (Actor(actor), mut score) in query.iter_mut() {
+        if let Ok(imp) = imps.get(*actor) {
+            if imp.load_amount >= 1.0 {
+                score.set(1.0);
+            } else {
+                score.set(0.0);
+            }
+        }
+    }
+}
+
+fn do_drop(
+    mut imps: Query<(&mut Imp, &Transform)>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoDrop>>,
+    mut cmds: Commands,
+) {
+    for (Actor(actor), mut state) in query.iter_mut() {
+        if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+            let pos = transform.translation;
+
+            match *state {
+                ActionState::Requested => {
+                    println!("DoDrop");
+                    imp.walk_destination = WalkDestination::Vec3(pos + 1.5 * random_vec());
+                    *state = ActionState::Executing;
+                }
+                ActionState::Executing => {
+                    if let WalkDestination::Vec3(dest) = imp.walk_destination {
+                        if pos.distance_squared(dest) < 0.1 {
+                            let drop_amount = imp.load_amount.max(1.0);
+                            imp.load_amount = imp.load_amount - drop_amount;
+
+                            cmds.spawn_bundle((
+                                StoreIntoPile {
+                                    load: imp.load.unwrap(),
+                                    amount: drop_amount,
+                                    pile: None,
+                                },
+                                transform.clone(),
+                            ));
+
+                            if imp.load_amount == 0.0 {
+                                imp.load = None;
+                            }
+
+                            *state = ActionState::Success;
+                        }
+                    }
+                }
+                ActionState::Cancelled => {
+                    if imp.load_amount < 1.0 {
+                        *state = ActionState::Success;
+                    } else {
+                        *state = ActionState::Failure;
+                    }
+                }
+                ActionState::Success | ActionState::Failure => {
+                    imp.walk_destination = WalkDestination::None;
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn want_to_dig(
+    imps: Query<&Imp>,
+    boulders: Query<&Boulder>,
+    mut query: Query<(&Actor, &mut Score), With<WantToDig>>,
+) {
+    for (Actor(actor), mut score) in query.iter_mut() {
+        if let Ok(imp) = imps.get(*actor) {
+            if imp.load_amount < 1.0 {
+                if let Some(thing) = imp.load {
+                    if boulders
+                        .iter()
+                        .filter(|boulder| {
+                            boulder.marked_for_digging && thing == boulder.material.into()
+                        })
+                        .next()
+                        .is_some()
+                    {
+                        score.set(1.0);
+                    }
+                } else if boulders
+                    .iter()
+                    .filter(|boulder| boulder.marked_for_digging)
+                    .next()
+                    .is_some()
+                {
+                    score.set(1.0);
+                } else {
+                    score.set(0.0);
+                }
+            } else {
+                score.set(0.0);
+            }
+        }
+    }
+}
+
+fn do_dig(
+    mut imps: Query<(&mut Imp, &Transform)>,
+    boulders: Query<(Entity, &Boulder, &Transform)>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoDig>>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_seconds();
+
+    for (Actor(actor), mut state) in query.iter_mut() {
+        if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+            let pos = transform.translation;
+
+            match *state {
+                ActionState::Requested => {
+                    println!("DoDig");
+                    imp.walk_destination = boulders
+                        .iter()
+                        .filter(|(_, boulder, _)| boulder.marked_for_digging)
+                        .filter(|(_, boulder, _)| {
+                            imp.load.is_none() || imp.load == Some(boulder.material.into())
+                        })
+                        .map(|(entity, _, transform)| {
+                            (entity, pos.distance_squared(transform.translation))
+                        })
+                        .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
+                        .map(|(e, _)| WalkDestination::Entity(e))
+                        .unwrap_or(WalkDestination::None);
+                    *state = ActionState::Executing;
+                }
+                ActionState::Executing => {
+                    if let WalkDestination::Entity(entity) = imp.walk_destination {
+                        if let Ok((_, boulder, transform)) = boulders.get(entity) {
+                            let material = Some(boulder.material.into());
+
+                            if imp.load.is_some() && imp.load != material {
+                                *state = ActionState::Failure;
+                            } else if imp.load_amount < 1.0 {
+                                if imp.load.is_none() {
+                                    imp.load = material;
+                                }
+
+                                if pos.distance_squared(transform.translation) < 1.0 {
+                                    imp.load_amount = (imp.load_amount + dt).min(1.0);
+                                }
+                            } else {
+                                *state = ActionState::Success;
+                            }
+                        }
+                    }
+                }
+                ActionState::Cancelled => {
+                    if imp.load_amount < 1.0 {
+                        *state = ActionState::Failure;
+                    } else {
+                        *state = ActionState::Success;
+                    }
+                }
+                ActionState::Success | ActionState::Failure => {
+                    imp.walk_destination = WalkDestination::None;
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn do_meander(
+    mut imps: Query<(&mut Imp, &Transform)>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoMeander>>,
+) {
+    for (Actor(actor), mut state) in query.iter_mut() {
+        if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+            let pos = transform.translation;
+
+            match *state {
+                ActionState::Requested => {
+                    println!("DoMeander");
+                    imp.walk_destination = WalkDestination::Vec3(pos + 2.0 * random_vec());
+                    *state = ActionState::Executing;
+                }
+                ActionState::Executing => {
+                    if let WalkDestination::Vec3(dest) = imp.walk_destination {
+                        if pos.distance_squared(dest) < 0.1 {
+                            *state = ActionState::Success;
+                        }
+                    }
+                }
+                ActionState::Cancelled => {
+                    *state = ActionState::Success;
+                }
+                ActionState::Success => {
+                    imp.walk_destination = WalkDestination::None;
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+////////
+
+struct Thirst {
+    thirst: f32,
+    per_second: f32,
+}
+
+fn thirst_system(time: Res<Time>, mut thirsts: Query<&mut Thirst>) {
+    for mut thirst in thirsts.iter_mut() {
+        thirst.thirst += thirst.per_second * (time.delta().as_micros() as f32 / 1_000_000.0);
+        if thirst.thirst >= 100.0 {
+            thirst.thirst = 100.0;
+        }
+        println!("Thirst: {}", thirst.thirst);
+    }
+}
+
+impl Thirst {
+    fn new(thirst: f32, per_second: f32) -> Self {
+        Self { thirst, per_second }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Thirsty;
+
+impl Thirsty {
+    fn build() -> ThirstyBuilder {
+        ThirstyBuilder
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ThirstyBuilder;
+
+impl ScorerBuilder for ThirstyBuilder {
+    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+        cmd.entity(scorer).insert(Thirsty);
+    }
+}
+
+fn thirsty_scorer_system(
+    thirsts: Query<&Thirst>,
+    mut query: Query<(&Actor, &mut Score), With<Thirsty>>,
+) {
+    for (Actor(actor), mut score) in query.iter_mut() {
+        if let Ok(thirst) = thirsts.get(*actor) {
+            score.set(thirst.thirst / 100.0);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Drink;
+
+impl Drink {
+    fn build() -> DrinkBuilder {
+        DrinkBuilder
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DrinkBuilder;
+
+impl ActionBuilder for DrinkBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action).insert(Drink);
+    }
+}
+
+fn drink_action_system(
+    mut thirsts: Query<&mut Thirst>,
+    mut query: Query<(&Actor, &mut ActionState), With<Drink>>,
+) {
+    for (Actor(actor), mut state) in query.iter_mut() {
+        if let Ok(mut thirst) = thirsts.get_mut(*actor) {
+            match *state {
+                ActionState::Requested => {
+                    println!("Drink");
+                    thirst.thirst = 10.0;
+                    *state = ActionState::Success;
+                }
+                ActionState::Cancelled => {
+                    *state = ActionState::Failure;
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+///////
+
+fn random_vec() -> Vec3 {
+    let a = TAU * fastrand::f32();
+    vec3(a.cos(), 0.0, a.sin())
 }
