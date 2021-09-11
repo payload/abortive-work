@@ -51,7 +51,7 @@ enum UiMode {
     None,
     BuildTool,
     BuildConveyorTool,
-    Destructor,
+    DestructTool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -171,13 +171,13 @@ fn update_player(
                 state.mode = UiMode::BuildTool;
             }
             if input.just_pressed(KeyCode::L) {
-                state.mode = UiMode::Destructor;
+                state.mode = UiMode::DestructTool;
             }
             if input.just_pressed(KeyCode::E) {
                 mage.interact_with_focus = true;
             }
         }
-        UiMode::Destructor => {
+        UiMode::DestructTool => {
             if input.just_pressed(KeyCode::E) {
                 destructor.destruct_some(focus.entity);
             }
@@ -448,48 +448,35 @@ fn example_ui(
     mut boulder_config: ResMut<BoulderConfig>,
     mut debug_config: ResMut<DebugConfig>,
 ) {
-    // let mut thing_copy = state.thing;
-    // let thing = &mut thing_copy;
-
-    egui::Window::new("Thing")
+    egui::Window::new("abortive work")
         .default_pos((0.0, 0.0))
         .show(egui_ctx.ctx(), |ui| {
-            // ui.selectable_value(thing, Some(Thing::Stone), "Stone");
-            // ui.selectable_value(thing, Some(Thing::Coal), "Coal");
-            // ui.selectable_value(thing, Some(Thing::Iron), "Iron");
-            // ui.selectable_value(thing, Some(Thing::Gold), "Gold");
-            // ui.selectable_value(thing, Some(Thing::Tool), "Tool");
-
-            ui.label(format!("mode: {:?}", state.mode));
+            ui.heading(format!("{:?}", state.mode));
 
             match state.mode {
                 UiMode::None => {
-                    ui.label("Press J to build, L to destruct.");
+                    ui.label("(J) build tool (L) destruct tool");
                 }
                 UiMode::BuildTool => match state.build_tool_state.build {
                     Build::Boulder => {
-                        let material = state.build_tool_state.boulder_kind;
                         ui.label(format!(
-                            "{:?} {:?}. Press E to build, Q to cancel.",
-                            material,
+                            "{:?} {:?}. (E) build (Q) cancel",
+                            state.build_tool_state.boulder_kind,
                             Build::Boulder
                         ));
                     }
                     Build::Conveyor => {
-                        ui.label(format!(
-                            "{:?}. Press E to start a belt, Q to cancel.",
-                            Build::Conveyor
-                        ));
+                        ui.label(format!("{:?}. (E) start belt (Q) cancel", Build::Conveyor));
                     }
                     Build::Imp => {
-                        ui.label(format!("{:?}. Press E to spawn, Q to cancel.", Build::Imp));
+                        ui.label(format!("{:?}. (E) spawn (Q) cancel", Build::Imp));
                     }
                 },
-                UiMode::Destructor => {
-                    ui.label("Press E to destruct something near, Q to cancel.");
+                UiMode::DestructTool => {
+                    ui.label("(E) destruct (Q) cancel");
                 }
                 UiMode::BuildConveyorTool => {
-                    ui.label("Press E to build the belt, Q to cancel.");
+                    ui.label("(E) build (Q) cancel");
                 }
             }
 
