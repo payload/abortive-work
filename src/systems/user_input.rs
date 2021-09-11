@@ -576,9 +576,13 @@ impl<'w, 's> Details<'w, 's> {
                 if let Ok(conveyor) = self.conveyor.get(entity) {
                     let mage = self.mage.single();
                     format!(
-                        "Conveyor for {:?}. (E) mark with {:?}",
+                        "Conveyor for {:?}. {}",
                         conveyor.marked_for_thing,
-                        mage.peek_first()
+                        match (conveyor.marked_for_thing, mage.peek_first()) {
+                            (Some(_), None) => "(E) unmark".into(),
+                            (_, Some(thing)) => format!("(E) mark with {:?}", thing),
+                            _ => String::new(),
+                        }
                     )
                 } else if let Ok(boulder) = self.boulder.get(entity) {
                     format!(
