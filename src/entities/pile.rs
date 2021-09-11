@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{cone, Destructable, FocusObject, Thing};
 
-use super::{MageInteractable, NotGround};
+use super::{BoulderAssets, MageInteractable, NotGround};
 
 pub struct Pile {
     pub load: Thing,
@@ -26,7 +26,8 @@ impl Plugin for PilePlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system(store_into_pile)
-            .add_system(update_pile)
+            .add_system(update_pile_scale)
+            .add_system_to_stage(CoreStage::PostUpdate, update_pile_material)
             .add_system_to_stage(CoreStage::Last, despawn_empty_piles);
     }
 }
@@ -36,6 +37,8 @@ pub struct PileSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, PileAssets>,
 }
+
+struct PileModel;
 
 impl<'w, 's> PileSpawn<'w, 's> {
     pub fn spawn<'a>(&'a mut self, pile: Pile, transform: Transform) -> EntityCommands<'w, 's, 'a> {
@@ -47,6 +50,7 @@ impl<'w, 's> PileSpawn<'w, 's> {
                 mesh: self.assets.mesh.clone(),
                 ..Default::default()
             })
+            .insert(PileModel)
             .insert(NotGround)
             .id();
 
@@ -142,7 +146,7 @@ fn store_into_pile(
     }
 }
 
-fn update_pile(mut piles: Query<(&Pile, &mut Transform), Changed<Pile>>) {
+fn update_pile_scale(mut piles: Query<(&Pile, &mut Transform), Changed<Pile>>) {
     for (pile, mut transform) in piles.iter_mut() {
         // V = pi * r*r * h/3
         // h = r
@@ -151,6 +155,40 @@ fn update_pile(mut piles: Query<(&Pile, &mut Transform), Changed<Pile>>) {
         let scale = Vec3::new(h, h, h);
         if transform.scale != scale {
             transform.scale = scale;
+        }
+    }
+}
+
+fn update_pile_material(
+    piles: Query<(&Pile, &Children), Changed<Pile>>,
+    boulder_assets: Res<BoulderAssets>,
+    pile_assets: Res<PileAssets>,
+    mut materials: Query<&mut Handle<StandardMaterial>, With<PileModel>>,
+) {
+    let BoulderAssets {
+        stone,
+        coal,
+        iron,
+        gold,
+        ..
+    } = &*boulder_assets;
+    let something = &pile_assets.material;
+
+    for (pile, children) in piles.iter() {
+        let new_material = match pile.load {
+            Thing::Stone => stone,
+            Thing::Coal => coal,
+            Thing::Iron => iron,
+            Thing::Gold => gold,
+            Thing::Tool => something,
+        };
+
+        for child in children.iter() {
+            if let Ok(mut material) = materials.get_mut(*child) {
+                if &*material != new_material {
+                    *material = new_material.clone();
+                }
+            }
         }
     }
 }

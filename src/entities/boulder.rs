@@ -126,6 +126,9 @@ fn load_boulder_assets(
     fn material(color: Color) -> StandardMaterial {
         StandardMaterial {
             base_color: color,
+            metallic: 0.0,
+            reflectance: 0.0,
+            roughness: 1.0,
             ..Default::default()
         }
     }
