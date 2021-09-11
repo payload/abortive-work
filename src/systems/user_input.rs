@@ -3,6 +3,7 @@ use bevy::{
     input::{keyboard::KeyboardInput, system::exit_on_esc_system, ElementState},
     prelude::*,
 };
+use bevy_egui::egui;
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
@@ -445,7 +446,7 @@ fn example_ui(
     state: Res<UiState>,
     egui_ctx: Res<EguiContext>,
     details: Details,
-    mut boulder_config: ResMut<BoulderConfig>,
+    boulder_config: ResMut<BoulderConfig>,
     mut debug_config: ResMut<DebugConfig>,
 ) {
     egui::Window::new("abortive work")
@@ -481,18 +482,6 @@ fn example_ui(
             }
 
             ui.add_space(8.0);
-            let mut value = boulder_config.max_angle_deviation.to_degrees();
-            ui.add(
-                egui::Slider::new(&mut value, 0.0..=45.0)
-                    .integer()
-                    .text("Boulder max angle deviation"),
-            );
-            let value = value.to_radians();
-            if boulder_config.max_angle_deviation != value {
-                boulder_config.max_angle_deviation = value;
-            }
-
-            ui.add_space(8.0);
             details.add_to_ui(ui);
 
             ui.add_space(8.0);
@@ -501,7 +490,24 @@ fn example_ui(
                 &mut debug_config.imp_walk_destination,
                 "imp walk destination",
             );
+
+            ui.add_space(8.0);
+            boulder_config_ui(ui, boulder_config);
         });
+}
+
+fn boulder_config_ui(ui: &mut egui::Ui, mut boulder_config: ResMut<BoulderConfig>) {
+    ui.heading("Boulder config");
+    let mut value = boulder_config.max_angle_deviation.to_degrees();
+    ui.add(
+        egui::Slider::new(&mut value, 0.0..=45.0)
+            .integer()
+            .text("Boulder max angle deviation"),
+    );
+    let value = value.to_radians();
+    if boulder_config.max_angle_deviation != value {
+        boulder_config.max_angle_deviation = value;
+    }
 }
 
 #[derive(SystemParam)]
