@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::entities::BoulderMaterial;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

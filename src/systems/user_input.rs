@@ -519,8 +519,6 @@ fn example_ui(
 
 #[derive(SystemParam)]
 pub struct Details<'w, 's> {
-    models: Query<'w, 's, (&'static Parent, &'static Selection), With<ImpModel>>,
-    imps: Query<'w, 's, &'static Imp>,
     mage: Query<'w, 's, &'static Mage>,
     focus: Query<'w, 's, &'static Focus>,
     conveyor: Query<'w, 's, &'static Conveyor>,
@@ -530,45 +528,19 @@ pub struct Details<'w, 's> {
 
 impl<'w, 's> Details<'w, 's> {
     fn add_to_ui(&self, ui: &mut egui::Ui) {
-        for _imp in self
-            .models
-            .iter()
-            .filter(|(_, selection)| selection.selected())
-            .filter_map(|(parent, _)| self.imps.get(**parent).ok())
-        {
-            // let desc = format!(
-            //     "{name} {does_something}{and_carries}.",
-            //     name = "imp",
-            //     does_something = match imp.behavior {
-            //         ImpBehavior::Idle => "does nothing",
-            //         ImpBehavior::Dig => "diggs",
-            //         ImpBehavior::Store => "stores",
-            //         ImpBehavior::Follow(_) => "follows",
-            //     },
-            //     and_carries = match imp.load {
-            //         Some(load) => format!(" and carries {:.1} {:?}", imp.load_amount, load),
-            //         None => String::new(),
-            //     }
-            // );
+        ui.heading("Mage");
+        ui.label(if let Ok(mage) = self.mage.get_single() {
+            let mut desc = "Carries".to_string();
+            for stack in mage.inventory.iter() {
+                for thing in stack.thing {
+                    desc.push_str(&format!(" {:.1} {:?}", stack.amount, thing));
+                }
+            }
 
-            // ui.label(desc);
-        }
-
-        for mage in self.mage.get_single() {
-            let inventory: String = mage
-                .inventory
-                .iter()
-                .filter_map(|stack| {
-                    stack
-                        .thing
-                        .map(|thing| format!(" {:.1} {:?}", stack.amount, thing))
-                })
-                .collect();
-
-            let desc = format!("mage has{}", inventory);
-
-            ui.label(desc);
-        }
+            desc
+        } else {
+            String::new()
+        });
 
         ui.heading("Focus");
         ui.label(
