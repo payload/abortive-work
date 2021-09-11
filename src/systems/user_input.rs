@@ -30,8 +30,14 @@ impl Plugin for UserInputPlugin {
             .add_system(update_boulder_marked_for_digging)
             .add_system(player_movement)
             .add_system(update_player)
-            .insert_resource(UiState::default());
+            .insert_resource(UiState::default())
+            .init_resource::<DebugConfig>();
     }
+}
+
+#[derive(Default)]
+pub struct DebugConfig {
+    pub imp_walk_destination: bool,
 }
 
 #[derive(Debug)]
@@ -157,7 +163,7 @@ fn update_player(
     mut boulder: BoulderSpawn,
     mut destructor: Destructor,
 ) {
-    let (mage_entity, mage_transform, mut mage, focus) = mage.single_mut().unwrap();
+    let (mage_entity, mage_transform, mut mage, focus) = mage.single_mut();
 
     match state.mode {
         UiMode::None => {
@@ -275,7 +281,7 @@ fn player_movement(
 
     control = control.normalize_or_zero();
 
-    if let Ok(mut transform) = query.single_mut() {
+    if let Ok(mut transform) = query.get_single_mut() {
         if control != Vec3::ZERO {
             transform.translation += control.normalize_or_zero() * speed * dt;
             transform.rotation = Quat::from_rotation_y(control.x.atan2(control.z));
@@ -305,7 +311,7 @@ fn click_boulder(
         if let Interaction::Clicked = interaction {
             let boulder_entity = **parent;
             let boulder = boulders.get_mut(boulder_entity);
-            let mage = mage.single();
+            let mage = mage.get_single();
             if let (Ok(mut boulder), Ok(mage)) = (boulder, mage) {
                 let following_imps: Vec<_> = imps
                     .iter_mut()
@@ -339,7 +345,7 @@ fn click_imp(
     for (parent, interaction) in models.iter() {
         if let Interaction::Clicked = interaction {
             if let Ok(mut imp) = imp.get_mut(**parent) {
-                if let Ok(mage) = mage.single() {
+                if let Ok(mage) = mage.get_single() {
                     imp.maybe_follow(mage);
                 }
             }
@@ -355,7 +361,7 @@ fn click_smithery(
     for (parent, interaction) in models.iter() {
         if let Interaction::Clicked = interaction {
             if let Ok(store) = store.get_mut(**parent) {
-                if let Ok(mut mage) = mage.single_mut() {
+                if let Ok(mut mage) = mage.get_single_mut() {
                     if let Some(stack) = store.first_output_stack() {
                         if let Some(thing) = stack.thing {
                             if stack.amount > 0.0 {
@@ -402,7 +408,7 @@ fn interact_ground(
         return;
     }
 
-    if let Ok(camera) = camera.single() {
+    if let Ok(camera) = camera.get_single() {
         for (ground_model_entity, _parent, interaction) in models.iter() {
             let changed = interaction_changed.get(ground_model_entity).is_ok();
 
@@ -440,6 +446,7 @@ fn example_ui(
     egui_ctx: Res<EguiContext>,
     details: Details,
     mut boulder_config: ResMut<BoulderConfig>,
+    mut debug_config: ResMut<DebugConfig>,
 ) {
     // let mut thing_copy = state.thing;
     // let thing = &mut thing_copy;
@@ -488,7 +495,7 @@ fn example_ui(
                 }
             }
 
-            ui.add_space(32.0);
+            ui.add_space(8.0);
             let mut value = boulder_config.max_angle_deviation.to_degrees();
             ui.add(
                 egui::Slider::new(&mut value, 0.0..=45.0)
@@ -500,8 +507,15 @@ fn example_ui(
                 boulder_config.max_angle_deviation = value;
             }
 
-            ui.add_space(32.0);
+            ui.add_space(8.0);
             details.add_to_ui(ui);
+
+            ui.add_space(8.0);
+            ui.heading("Debug config");
+            ui.checkbox(
+                &mut debug_config.imp_walk_destination,
+                "imp walk destination",
+            );
         });
 }
 
@@ -538,7 +552,7 @@ impl<'w, 's> Details<'w, 's> {
             // ui.label(desc);
         }
 
-        for mage in self.mage.single() {
+        for mage in self.mage.get_single() {
             let inventory: String = mage
                 .inventory
                 .iter()

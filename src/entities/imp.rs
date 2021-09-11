@@ -2,10 +2,11 @@ use std::{cmp::Ordering, f32::consts::TAU};
 
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 use bevy_mod_picking::PickableBundle;
+use bevy_prototype_debug_lines::DebugLines;
 
 use crate::{
     entities::StoreIntoPile,
-    systems::{Destructable, FunnyAnimation, Thing},
+    systems::{DebugConfig, Destructable, FunnyAnimation, Thing},
 };
 
 use super::Boulder;
@@ -64,6 +65,7 @@ impl Plugin for ImpPlugin {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system(update_imp_commands)
             .add_system_to_stage(CoreStage::PostUpdate, update_walk)
+            .add_system_to_stage(CoreStage::PostUpdate, debug_lines)
             .add_plugin(ImpBrainPlugin);
     }
 }
@@ -102,119 +104,6 @@ impl<'w, 's> ImpSpawn<'w, 's> {
             .push_children(&[model]);
     }
 }
-
-// #[derive(SystemParam)]
-// pub struct QueryBoulders<'w, 's> {
-//     query: Query<'w, 's, (Entity, &'static Transform, &'static Boulder)>,
-// }
-
-// impl<'w, 's> QueryBoulders<'w, 's> {
-//     fn get_target_boulder(&self, target: Target, pos: Vec3) -> Target {
-//         if let Some(entity) = target.entity {
-//             self.update_target_boulder(entity, pos)
-//         } else {
-//             self.find_target_boulder(pos)
-//         }
-//     }
-
-//     fn find_target_boulder(&self, pos: Vec3) -> Target {
-//         let mut boulders = Vec::new();
-
-//         for (entity, transform, boulder) in self.query.iter() {
-//             if boulder.marked_for_digging {
-//                 boulders.push(Target {
-//                     entity: Some(entity),
-//                     distance_squared: pos.distance_squared(transform.translation),
-//                 });
-//             }
-//         }
-
-//         if boulders.is_empty() {
-//             Target::default()
-//         } else {
-//             let index = fastrand::usize(0..boulders.len());
-//             boulders[index]
-//         }
-//     }
-
-//     fn update_target_boulder(&self, entity: Entity, pos: Vec3) -> Target {
-//         self.query
-//             .get(entity)
-//             .ok()
-//             .map_or(Target::default(), |(_, transform, _boulder)| {
-//                 // if boulder.marked_for_digging {
-//                 Target {
-//                     entity: Some(entity),
-//                     distance_squared: pos.distance_squared(transform.translation),
-//                 }
-//                 // } else {
-//                 // Target::default()
-//                 // }
-//             })
-//     }
-
-//     fn thing(&self, entity: Entity) -> Option<Thing> {
-//         self.query
-//             .get(entity)
-//             .map(|(_, _, b)| b.material.into())
-//             .ok()
-//     }
-// }
-
-// #[derive(SystemParam)]
-// pub struct QueryStore<'w, 's> {
-//     query: QuerySet<
-//         'w,
-//         's,
-//         (
-//             QueryState<(Entity, &'static Transform, &'static Store)>,
-//             QueryState<&'static mut Store>,
-//         ),
-//     >,
-// }
-
-// impl<'w, 's> QueryStore<'w, 's> {
-//     fn get_target_store(&mut self, target: Target, pos: Vec3, imp: &Imp) -> Target {
-//         if let Some(load) = imp.load {
-//             if let Some(entity) = target.entity {
-//                 if let Some((_, transform, store)) = self.query.q0().get(entity).ok() {
-//                     if store.space_for_thing(load) > 0.0 {
-//                         return Target {
-//                             entity: Some(entity),
-//                             distance_squared: pos.distance_squared(transform.translation),
-//                         };
-//                     }
-//                 }
-//             } else {
-//                 let mut stores: Vec<_> = self
-//                     .query
-//                     .q0()
-//                     .iter()
-//                     .filter(|(_, _, store)| store.space_for_thing(load) >= 1.0)
-//                     .collect();
-//                 stores.sort_unstable_by_key(|(_, _, s)| -s.priority_of_thing(load));
-
-//                 if !stores.is_empty() {
-//                     let (entity, transform, _) = stores[0];
-//                     return Target {
-//                         entity: Some(entity),
-//                         distance_squared: pos.distance_squared(transform.translation),
-//                     };
-//                 }
-//             }
-//         }
-
-//         Target::default()
-//     }
-
-//     fn store_thing(&mut self, entity: Entity, amount: f32, thing: Thing) -> f32 {
-//         if let Ok(mut store) = self.query.q1().get_mut(entity) {
-//             store.store_thing(amount, thing)
-//         } else {
-//             0.0
-//         }
-//     }
-// }
 
 fn load_assets(
     mut cmds: Commands,
@@ -601,4 +490,31 @@ fn do_meander(
 fn random_vec() -> Vec3 {
     let a = TAU * fastrand::f32();
     vec3(a.cos(), 0.0, a.sin())
+}
+
+///////
+
+fn debug_lines(
+    config: Res<DebugConfig>,
+    mut debug: ResMut<DebugLines>,
+    imps: Query<(&Imp, &Transform)>,
+    transforms: Query<&Transform>,
+) {
+    if !config.imp_walk_destination {
+        return;
+    }
+
+    for (imp, transform) in imps.iter() {
+        let pos = transform.translation;
+
+        let dest = match imp.walk_destination {
+            WalkDestination::None => None,
+            WalkDestination::Vec3(dest) => Some(dest),
+            WalkDestination::Entity(entity) => transforms.get(entity).ok().map(|t| t.translation),
+        };
+
+        if let Some(dest) = dest {
+            debug.line_colored(pos, dest, 0.0, Color::BLUE);
+        }
+    }
 }

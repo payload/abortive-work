@@ -14,9 +14,10 @@ bevy = {git = "https://github.com/bevyengine/bevy"}
 bevy_egui = {git = "https://github.com/jakobhellermann/bevy_egui", branch = "bevy-main"}
 bevy_mod_picking = {git = "https://github.com/JulianRuiseco/bevy_mod_picking"}
 big-brain = {git = "https://github.com/payload/big-brain.git"}
+bevy_prototype_debug_lines = {git = "https://github.com/payload/bevy_debug_lines.git"}
 
 [patch.'https://github.com/bevyengine/bevy']
-bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "27bfbda7bc76e4196962926e3541ca2ca24b7f53"}
+bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "51a5070c"}
 
 [patch.'crates-io']
-bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "27bfbda7bc76e4196962926e3541ca2ca24b7f53"}
+bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "51a5070c"}

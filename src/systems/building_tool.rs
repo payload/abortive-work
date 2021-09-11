@@ -72,7 +72,9 @@ fn update_building_tool(
         return;
     }
 
-    if let Ok((mut model_visible, mut model_transform, mut model_mesh)) = ghost_model.single_mut() {
+    if let Ok((mut model_visible, mut model_transform, mut model_mesh)) =
+        ghost_model.get_single_mut()
+    {
         let ghost_visible = tool.ghost_visible && tool.building.is_some();
 
         if model_visible.is_visible != ghost_visible {
@@ -80,7 +82,7 @@ fn update_building_tool(
         }
 
         if ghost_visible {
-            if let Ok(mut ghost_transform) = ghost.single_mut() {
+            if let Ok(mut ghost_transform) = ghost.get_single_mut() {
                 ghost_transform.translation = tool.placement.translation;
             }
         }

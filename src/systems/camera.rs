@@ -16,8 +16,8 @@ fn camera_tracking(
 ) {
     let dt = time.delta_seconds();
 
-    for (tracking_transform, tracking) in tracking.single() {
-        for mut camera_transform in camera.single_mut() {
+    for (tracking_transform, tracking) in tracking.get_single() {
+        for mut camera_transform in camera.get_single_mut() {
             let diff =
                 tracking_transform.translation + tracking.offset - camera_transform.translation;
             let step = diff.normalize_or_zero() * diff.length_squared();

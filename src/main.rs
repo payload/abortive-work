@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 mod entities;
+use bevy_prototype_debug_lines::DebugLinesPlugin;
 use entities::*;
 
 mod systems;
@@ -19,6 +20,7 @@ fn main() {
         .add_plugin(CameraPlugin)
         .add_plugin(AugmentationPlugin)
         .add_plugin(FocusPlugin)
+        .add_plugin(DebugLinesPlugin)
         .add_startup_system(spawn_level_1)
         .run();
 
