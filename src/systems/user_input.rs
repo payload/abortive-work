@@ -452,8 +452,6 @@ fn example_ui(
     // let thing = &mut thing_copy;
 
     egui::Window::new("Thing")
-        .scroll(true)
-        .default_width(200.0)
         .default_pos((0.0, 0.0))
         .show(egui_ctx.ctx(), |ui| {
             // ui.selectable_value(thing, Some(Thing::Stone), "Stone");
@@ -524,6 +522,10 @@ pub struct Details<'w, 's> {
     models: Query<'w, 's, (&'static Parent, &'static Selection), With<ImpModel>>,
     imps: Query<'w, 's, &'static Imp>,
     mage: Query<'w, 's, &'static Mage>,
+    focus: Query<'w, 's, &'static Focus>,
+    conveyor: Query<'w, 's, &'static Conveyor>,
+    boulder: Query<'w, 's, &'static Boulder>,
+    pile: Query<'w, 's, &'static Pile>,
 }
 
 impl<'w, 's> Details<'w, 's> {
@@ -567,6 +569,35 @@ impl<'w, 's> Details<'w, 's> {
 
             ui.label(desc);
         }
+
+        ui.heading("Focus");
+        ui.label(
+            if let Some(entity) = self.focus.get_single().ok().and_then(|focus| focus.entity) {
+                if let Ok(conveyor) = self.conveyor.get(entity) {
+                    let mage = self.mage.single();
+                    format!(
+                        "Conveyor for {:?}. (E) mark with {:?}",
+                        conveyor.marked_for_thing,
+                        mage.peek_first()
+                    )
+                } else if let Ok(boulder) = self.boulder.get(entity) {
+                    format!(
+                        "Boulder of {:?}. (E) {}",
+                        boulder.material,
+                        match boulder.marked_for_digging {
+                            true => "stop dig",
+                            false => "let dig",
+                        }
+                    )
+                } else if let Ok(pile) = self.pile.get(entity) {
+                    format!("Pile of {:.1} {:?}. (E) take one", pile.amount, pile.load)
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            },
+        );
     }
 }
 

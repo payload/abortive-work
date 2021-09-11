@@ -41,6 +41,16 @@ impl Mage {
         }
     }
 
+    pub fn peek_first(&self) -> Option<Thing> {
+        for stack in self.inventory.iter() {
+            if stack.amount > 0.0 {
+                return stack.thing;
+            }
+        }
+
+        None
+    }
+
     pub fn take_first(&mut self, amount: f32) -> Option<Thing> {
         for stack in self.inventory.iter_mut() {
             if stack.amount >= amount {
@@ -158,6 +168,8 @@ fn update(
                 if let Ok(mut conveyor) = conveyor.get_mut(entity) {
                     if let Some(thing) = mage.take_first(1.0) {
                         conveyor.store(thing, 1.0);
+                    } else {
+                        conveyor.marked_for_thing = None;
                     }
                 }
             }
