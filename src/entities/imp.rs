@@ -287,7 +287,6 @@ fn do_drop(
 
             match *state {
                 ActionState::Requested => {
-                    println!("DoDrop");
                     imp.walk_destination = WalkDestination::Vec3(pos + 1.5 * random_vec());
                     *state = ActionState::Executing;
                 }
@@ -383,7 +382,6 @@ fn do_dig(
 
             match *state {
                 ActionState::Requested => {
-                    println!("DoDig");
                     imp.boulder = boulders
                         .iter()
                         .filter(|(_, boulder, _)| boulder.marked_for_digging)
@@ -433,7 +431,6 @@ fn do_dig(
                     }
                 }
                 ActionState::Cancelled => {
-                    println!("DoDig Cancelled");
                     if imp.load_amount < 1.0 {
                         *state = ActionState::Failure;
                     } else {
@@ -441,7 +438,6 @@ fn do_dig(
                     }
                 }
                 ActionState::Success | ActionState::Failure => {
-                    println!("DoDig End");
                     imp.boulder = None;
                     imp.walk_destination = WalkDestination::None;
                     cmds.entity(*actor).remove::<FunnyAnimation>();
@@ -462,7 +458,6 @@ fn do_meander(
 
             match *state {
                 ActionState::Requested => {
-                    println!("DoMeander");
                     imp.walk_destination = WalkDestination::Vec3(pos + 2.0 * random_vec());
                     *state = ActionState::Executing;
                 }
