@@ -11,7 +11,7 @@ use super::NotGround;
 
 #[derive(Default)]
 pub struct Conveyor {
-    marked_for_thing: Option<Thing>,
+    pub marked_for_thing: Option<Thing>,
 }
 
 impl Conveyor {

@@ -9,7 +9,7 @@ use crate::{
     systems::{DebugConfig, Destructable, FunnyAnimation, Thing},
 };
 
-use super::Boulder;
+use super::{Boulder, Conveyor};
 
 #[derive(Clone)]
 pub struct Imp {
@@ -22,6 +22,7 @@ pub struct Imp {
     pub want_to_follow: Option<Entity>,
     pub idle_complete: bool,
     pub boulder: Option<Entity>,
+    pub conveyor: Option<Entity>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -29,6 +30,18 @@ pub enum WalkDestination {
     None,
     Vec3(Vec3),
     Entity(Entity),
+}
+
+impl Default for WalkDestination {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl From<Option<Entity>> for WalkDestination {
+    fn from(o: Option<Entity>) -> Self {
+        o.map(|e| WalkDestination::Entity(e)).unwrap_or_default()
+    }
 }
 
 impl Imp {
@@ -43,6 +56,7 @@ impl Imp {
             want_to_follow: None,
             idle_complete: false,
             boulder: None,
+            conveyor: None,
         }
     }
 
@@ -181,7 +195,9 @@ struct ImpBrainPlugin;
 impl Plugin for ImpBrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_system(want_to_dig)
+            .add_system(want_to_store)
             .add_system(want_to_drop)
+            .add_system(do_store)
             .add_system(do_dig)
             .add_system(do_drop)
             .add_system(do_meander)
@@ -264,11 +280,94 @@ impl ActionBuilder for DoMeanderBuilder {
 
 ////////
 
+fn want_to_store(
+    imps: Query<&Imp>,
+    mut query: Query<(&Actor, &mut Score), With<WantToStore>>,
+    conveyors: Query<&Conveyor>,
+) {
+    let things: Vec<Thing> = conveyors
+        .iter()
+        .filter_map(|it| it.marked_for_thing)
+        .collect();
+
+    for (Actor(actor), mut score) in query.iter_mut() {
+        for imp in imps.get(*actor) {
+            if imp.conveyor.is_some() {
+                score.set(1.0)
+            } else if imp.load_amount >= 1.0 && things.contains(&imp.load.unwrap()) {
+                score.set(1.0);
+            } else {
+                score.set(0.0);
+            }
+        }
+    }
+}
+
+fn do_store(
+    mut imps: Query<(&mut Imp, &Transform)>,
+    mut conveyors: Query<(Entity, &mut Conveyor, &Transform)>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoStore>>,
+    mut cmds: Commands,
+    time: Res<Time>,
+) {
+    let dt = time.delta_seconds();
+
+    for (Actor(actor), mut state) in query.iter_mut() {
+        if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+            let pos = transform.translation;
+
+            match *state {
+                ActionState::Requested => {
+                    imp.conveyor = conveyors
+                        .iter_mut()
+                        .filter(|(_, it, _)| it.marked_for_thing == imp.load)
+                        .map(|(e, c, t)| (t.translation.distance_squared(pos), e, c, t))
+                        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less))
+                        .map(|p| p.1);
+
+                    imp.walk_destination = imp.conveyor.into();
+
+                    *state = ActionState::Executing;
+                }
+                ActionState::Executing => {
+                    if let Some((_entity, conveyor, transform)) =
+                        imp.conveyor.and_then(|e| conveyors.get_mut(e).ok())
+                    {
+                        if conveyor.marked_for_thing != imp.load {
+                            *state = ActionState::Failure;
+                        } else if imp.load_amount == 0.0 {
+                            imp.load = None;
+                            *state = ActionState::Success;
+                        } else if pos.distance_squared(transform.translation) < 1.0 {
+                            imp.walk_destination = WalkDestination::None;
+                            imp.load_amount = (imp.load_amount - dt).max(0.0);
+                            cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
+                        }
+                    } else {
+                        *state = ActionState::Failure;
+                    }
+                }
+                ActionState::Cancelled => {
+                    *state = ActionState::Failure;
+                }
+                ActionState::Success | ActionState::Failure => {
+                    imp.conveyor = None;
+                    imp.walk_destination = WalkDestination::None;
+                    cmds.entity(*actor).remove::<FunnyAnimation>();
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+////////
+
 fn want_to_drop(imps: Query<&Imp>, mut query: Query<(&Actor, &mut Score), With<WantToDrop>>) {
     for (Actor(actor), mut score) in query.iter_mut() {
         if let Ok(imp) = imps.get(*actor) {
             if imp.load_amount >= 1.0 {
-                score.set(1.0);
+                score.set(0.9);
             } else {
                 score.set(0.0);
             }
@@ -394,12 +493,8 @@ fn do_dig(
                         .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
                         .map(|(e, _)| e);
 
-                    imp.walk_destination = imp
-                        .boulder
-                        .map(|e| WalkDestination::Entity(e))
-                        .unwrap_or(WalkDestination::None);
+                    imp.walk_destination = imp.boulder.into();
 
-                    cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
                     *state = ActionState::Executing;
                 }
                 ActionState::Executing => {
@@ -419,6 +514,7 @@ fn do_dig(
                                 if pos.distance_squared(transform.translation) < 1.0 {
                                     imp.walk_destination = WalkDestination::None;
                                     imp.load_amount = (imp.load_amount + dt).min(1.0);
+                                    cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
                                 }
                             } else {
                                 *state = ActionState::Success;
