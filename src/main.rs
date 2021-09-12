@@ -90,9 +90,8 @@ fn spawn_level_1(
     }
 
     let center = Vec3::new(7.0, 0.0, 6.0);
-    let at = |x: i32, z: i32| -> Transform {
-        Transform::from_xyz(center.x + x as f32, 0.0, center.z + z as f32)
-    };
+    let pos = |x: i32, z: i32| Vec3::new(center.x + x as f32, 0.0, center.z + z as f32);
+    let at = |x: i32, z: i32| Transform::from_translation(pos(x, z));
 
     ground.spawn(Ground, at(0, 0));
 
@@ -108,5 +107,5 @@ fn spawn_level_1(
 
     pile.spawn(Pile::new(Thing::Coal, 1.0), at(0, 1));
 
-    conveyor.spawn_line(at(1, -1).translation, at(-1, -3).translation);
+    conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3), pos(-3, -13)], None);
 }
