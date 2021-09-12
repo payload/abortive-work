@@ -475,7 +475,7 @@ fn boulder_config_ui(ui: &mut egui::Ui, mut boulder_config: ResMut<BoulderConfig
 pub struct Details<'w, 's> {
     mage: Query<'w, 's, &'static Mage>,
     focus: Query<'w, 's, &'static Focus>,
-    conveyor: Query<'w, 's, &'static Conveyor>,
+    conveyor: Query<'w, 's, &'static ConveyorBelt>,
     boulder: Query<'w, 's, &'static Boulder>,
     pile: Query<'w, 's, &'static Pile>,
 }

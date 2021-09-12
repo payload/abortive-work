@@ -108,5 +108,5 @@ fn spawn_level_1(
 
     pile.spawn(Pile::new(Thing::Coal, 1.0), at(0, 1));
 
-    conveyor.spawn_line(at(1, -1).translation, at(-6, -13).translation);
+    conveyor.spawn_line(at(1, -1).translation, at(-1, -3).translation);
 }

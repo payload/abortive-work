@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{Focus, Stack, Thing};
 
-use super::{Boulder, Conveyor, NotGround, Pile};
+use super::{Boulder, ConveyorBelt, NotGround, Pile};
 
 #[derive(Default)]
 pub struct Mage {
@@ -147,7 +147,7 @@ fn update(
     mut mages: Query<(&mut Mage, &Focus)>,
     mut boulder: Query<&mut Boulder>,
     mut pile: Query<&mut Pile>,
-    mut conveyor: Query<&mut Conveyor>,
+    mut conveyor: Query<&mut ConveyorBelt>,
 ) {
     for (mut mage, focus) in mages.iter_mut() {
         if mage.interact_with_focus {

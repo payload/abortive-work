@@ -9,7 +9,7 @@ use crate::{
     systems::{DebugConfig, Destructable, FunnyAnimation, Thing},
 };
 
-use super::{Boulder, Conveyor};
+use super::{Boulder, ConveyorBelt};
 
 #[derive(Clone)]
 pub struct Imp {
@@ -259,7 +259,7 @@ impl ActionBuilder for DoMeanderBuilder {
 fn want_to_store(
     imps: Query<&Imp>,
     mut query: Query<(&Actor, &mut Score), With<WantToStore>>,
-    conveyors: Query<&Conveyor>,
+    conveyors: Query<&ConveyorBelt>,
 ) {
     let things: Vec<Thing> = conveyors
         .iter()
@@ -281,7 +281,7 @@ fn want_to_store(
 
 fn do_store(
     mut imps: Query<(&mut Imp, &Transform)>,
-    mut conveyors: Query<(Entity, &mut Conveyor, &Transform)>,
+    mut conveyors: Query<(Entity, &mut ConveyorBelt, &Transform)>,
     mut query: Query<(&Actor, &mut ActionState), With<DoStore>>,
     mut cmds: Commands,
     time: Res<Time>,

@@ -10,6 +10,7 @@ use crate::systems::{Destructable, FocusObject, Thing};
 
 use super::NotGround;
 
+#[derive(Clone, Copy)]
 struct Item {
     thing: Thing,
     amount: f32,
@@ -18,13 +19,14 @@ struct Item {
 }
 
 #[derive(Default)]
-pub struct Conveyor {
+pub struct ConveyorBelt {
     pub marked_for_thing: Option<Thing>,
     items: Vec<Item>,
     length: i32,
+    output: Option<Entity>,
 }
 
-impl Conveyor {
+impl ConveyorBelt {
     pub fn new() -> Self {
         Self {
             length: 100,
@@ -33,13 +35,17 @@ impl Conveyor {
     }
 
     pub fn store(&mut self, thing: Thing, amount: f32) {
+        // TODO find free space, reject if not possible
         self.marked_for_thing = Some(thing);
-        self.items.push(Item {
-            thing,
-            amount,
-            size: 25,
-            pos: 0,
-        })
+        self.items.insert(
+            0,
+            Item {
+                thing,
+                amount,
+                size: 25,
+                pos: 0,
+            },
+        )
     }
 }
 
@@ -58,7 +64,7 @@ impl Plugin for ConveyorPlugin {
 pub struct ConveyorSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, ConveyorAssets>,
-    conveyors: Query<'w, 's, &'static Transform, With<Conveyor>>,
+    conveyors: Query<'w, 's, &'static Transform, With<ConveyorBelt>>,
 }
 
 impl<'w, 's> ConveyorSpawn<'w, 's> {
@@ -66,15 +72,41 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
         let from = self.snap_to_conveyor(from);
         let to = self.snap_to_conveyor(to);
 
-        for (pos, angle) in Self::spawn_positions_at_line(from, to) {
-            self.spawn(
-                Conveyor::new(),
-                Transform {
-                    rotation: Quat::from_rotation_y(angle),
-                    translation: pos,
-                    ..Default::default()
-                },
-            );
+        let mut line: Vec<_> = Self::spawn_positions_at_line(from, to)
+            .map(|(pos, angle)| {
+                (
+                    self.cmds.spawn().id(),
+                    ConveyorBelt::new(),
+                    Transform {
+                        rotation: Quat::from_rotation_y(angle),
+                        translation: pos,
+                        scale: Vec3::ONE,
+                    },
+                )
+            })
+            .collect();
+
+        for index in 0..line.len() - 1 {
+            let next_entity = line[index + 1].0;
+            line[index].1.output = Some(next_entity);
+        }
+
+        self.cmds.spawn().insert(ConveyorChain {
+            belts: line.iter().map(|p| p.0).collect(),
+        });
+
+        for (entity, belt, transform) in line {
+            let model = self.model(self.assets.material.clone());
+            self.cmds
+                .entity(entity)
+                .insert_bundle((
+                    belt,
+                    transform,
+                    GlobalTransform::identity(),
+                    Destructable,
+                    FocusObject,
+                ))
+                .push_children(&[model]);
         }
     }
 
@@ -153,7 +185,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
 
     fn spawn<'a>(
         &'a mut self,
-        conveyor: Conveyor,
+        conveyor: ConveyorBelt,
         transform: Transform,
     ) -> EntityCommands<'w, 's, 'a> {
         let model = self.model(self.assets.material.clone());
@@ -244,20 +276,88 @@ fn update_lines(
     }
 }
 
-fn convey_items(mut conveyors: Query<&mut Conveyor>) {
-    for mut conveyor in conveyors.iter_mut() {
-        let length = conveyor.length;
+struct ConveyorChain {
+    belts: Vec<Entity>,
+}
 
-        for mut item in conveyor.items.iter_mut() {
-            item.pos += 1;
-            if item.pos >= length {
-                item.pos = item.pos % length;
+impl ConveyorBelt {
+    fn left(&self) -> i32 {
+        self.items.first().map(|i| i.left()).unwrap_or(self.length)
+    }
+}
+
+impl Item {
+    fn left(&self) -> i32 {
+        self.pos - self.size / 2
+    }
+
+    fn right(&self) -> i32 {
+        self.pos - self.size / 2
+    }
+
+    fn extent(&self) -> i32 {
+        self.size / 2
+    }
+}
+
+fn convey_items(
+    chains: Query<&ConveyorChain>,
+    mut query_belts: QuerySet<(QueryState<&mut ConveyorBelt>, QueryState<&ConveyorBelt>)>,
+) {
+    for chain in chains.iter() {
+        for belt_entity in chain.belts.iter().rev().copied() {
+            let belts = query_belts.q1();
+            let belt = belts.get(belt_entity).unwrap();
+            if belt.items.len() > 0 {
+                let next_belt = belt.output.map(|e| belts.get(e).unwrap());
+
+                if let Some(next_belt) = next_belt {
+                    let next_belt_left = next_belt.left();
+                    let mut belts = query_belts.q0();
+                    let mut belt = belts.get_mut(belt_entity).unwrap();
+                    let mut transfer_index = None;
+                    let speed = 1;
+                    let length = belt.length;
+                    let mut right = length + next_belt_left; // note that next belt left could be negative
+
+                    for (index, item) in belt.items.iter_mut().enumerate().rev() {
+                        if item.right() < right {
+                            item.pos += speed.min(right - item.pos - speed - item.extent());
+                            right = item.left();
+
+                            // if the item should belong to the next belt
+                            if item.pos > length {
+                                transfer_index = Some(index); // then remember the index for later copy
+                                item.pos -= length; // and already set the pos to the pos in the next belt
+                            }
+                        }
+                    }
+
+                    if let Some(index) = transfer_index {
+                        let items: Vec<Item> = belt.items.drain(index..).collect();
+                        let output = belt.output.unwrap();
+                        let mut next_belt = belts.get_mut(output).unwrap();
+                        next_belt.items.splice(0..0, items);
+                    }
+                } else {
+                    let mut belts = query_belts.q0();
+                    let mut belt = belts.get_mut(belt_entity).unwrap();
+                    let speed = 1;
+                    let mut right = belt.length;
+
+                    for item in belt.items.iter_mut().rev() {
+                        if item.right() < right {
+                            item.pos += speed.min(right - item.pos - speed - item.extent());
+                            right = item.left();
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-fn debug_items(conveyors: Query<(&Conveyor, &Transform)>, mut debug: ResMut<DebugLines>) {
+fn debug_items(conveyors: Query<(&ConveyorBelt, &Transform)>, mut debug: ResMut<DebugLines>) {
     for (conveyor, transform) in conveyors.iter() {
         let c_pos = transform.translation;
         let c_dir = Transform::from_rotation(transform.rotation).mul_vec3(Vec3::Z);
