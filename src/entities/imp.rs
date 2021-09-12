@@ -77,7 +77,6 @@ pub struct ImpPlugin;
 impl Plugin for ImpPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system(update_imp_commands)
             .add_system_to_stage(CoreStage::PostUpdate, update_walk)
             .add_system_to_stage(CoreStage::PostUpdate, debug_lines)
             .add_plugin(ImpBrainPlugin);
@@ -111,7 +110,6 @@ impl<'w, 's> ImpSpawn<'w, 's> {
                 imp,
                 transform,
                 GlobalTransform::identity(),
-                ImpCommands::default(),
                 Destructable,
                 brain(),
             ))
@@ -164,28 +162,6 @@ fn update_walk(
         let speed = 3.0;
         let step = vec * speed * dt;
         transform.translation += step;
-    }
-}
-
-#[derive(Default)]
-pub struct ImpCommands {
-    pub commands: Vec<ImpCommand>,
-}
-
-pub enum ImpCommand {
-    Dig(Entity),
-}
-
-fn update_imp_commands(mut imps: Query<(&mut Imp, &mut ImpCommands)>) {
-    for (mut imp, mut imp_cmds) in imps.iter_mut() {
-        for cmd in imp_cmds.commands.drain(0..) {
-            match cmd {
-                ImpCommand::Dig(_entity) => {
-                    imp.want_to_follow = None;
-                    imp.idle_time = 1.0;
-                }
-            }
-        }
     }
 }
 

@@ -22,7 +22,6 @@ impl Plugin for UserInputPlugin {
             .add_plugin(EguiPlugin)
             .add_system(exit_on_esc_system)
             .add_system(make_pickable)
-            .add_system(click_boulder)
             .add_system(interact_ground)
             .add_system(example_ui)
             .add_system(click_imp)
@@ -300,44 +299,6 @@ fn make_pickable(
     }
 }
 
-fn click_boulder(
-    models: Query<(&Parent, &Interaction), (Changed<Interaction>, With<BoulderModel>)>,
-    mut boulders: Query<&mut Boulder>,
-    //
-    mage: Query<Entity, With<Mage>>,
-    mut imps: Query<(Entity, &Imp, &mut ImpCommands)>,
-    mut augment: AugmentSpawn,
-) {
-    for (parent, interaction) in models.iter() {
-        if let Interaction::Clicked = interaction {
-            let boulder_entity = **parent;
-            let boulder = boulders.get_mut(boulder_entity);
-            let mage = mage.get_single();
-            if let (Ok(mut boulder), Ok(mage)) = (boulder, mage) {
-                let following_imps: Vec<_> = imps
-                    .iter_mut()
-                    .filter(|(_, imp, _)| {
-                        if let Some(e) = imp.want_to_follow {
-                            e == mage
-                        } else {
-                            false
-                        }
-                    })
-                    .collect();
-
-                if following_imps.is_empty() {
-                    boulder.marked_for_digging = !boulder.marked_for_digging;
-                    augment.with_pedestal(boulder_entity, boulder.marked_for_digging);
-                } else {
-                    for (_, _, mut imp_cmds) in following_imps {
-                        imp_cmds.commands.push(ImpCommand::Dig(boulder_entity));
-                    }
-                }
-            }
-        }
-    }
-}
-
 fn click_imp(
     models: Query<(&Parent, &Interaction), (Changed<Interaction>, With<ImpModel>)>,
     mut imp: Query<&mut Imp>,
@@ -521,9 +482,7 @@ pub struct Details<'w, 's> {
 
 impl<'w, 's> Details<'w, 's> {
     fn add_to_ui(&self, ui: &mut egui::Ui) {
-        let display_stack_thing = |s: &Stack| 
-            s.thing.map(|t| format!(" {:.1} {:?}", s.amount, t))
-        ;
+        let display_stack_thing = |s: &Stack| s.thing.map(|t| format!(" {:.1} {:?}", s.amount, t));
 
         ui.heading("Mage");
         ui.label(
@@ -531,9 +490,7 @@ impl<'w, 's> Details<'w, 's> {
                 .get_single()
                 .map(|mage| {
                     std::iter::once("Carries".to_string())
-                        .chain(
-                            mage.inventory.iter().filter_map(display_stack_thing),
-                        )
+                        .chain(mage.inventory.iter().filter_map(display_stack_thing))
                         .collect::<String>()
                 })
                 .unwrap_or_default(),
