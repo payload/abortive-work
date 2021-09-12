@@ -4,23 +4,42 @@ use bevy::{
     ecs::system::{EntityCommands, SystemParam},
     prelude::*,
 };
+use bevy_prototype_debug_lines::DebugLines;
 
 use crate::systems::{Destructable, FocusObject, Thing};
 
 use super::NotGround;
 
+struct Item {
+    thing: Thing,
+    amount: f32,
+    size: i32,
+    pos: i32,
+}
+
 #[derive(Default)]
 pub struct Conveyor {
     pub marked_for_thing: Option<Thing>,
+    items: Vec<Item>,
+    length: i32,
 }
 
 impl Conveyor {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            length: 100,
+            ..Self::default()
+        }
     }
 
-    pub fn store(&mut self, thing: Thing, _amount: f32) {
+    pub fn store(&mut self, thing: Thing, amount: f32) {
         self.marked_for_thing = Some(thing);
+        self.items.push(Item {
+            thing,
+            amount,
+            size: 25,
+            pos: 0,
+        })
     }
 }
 
@@ -29,7 +48,9 @@ pub struct ConveyorPlugin;
 impl Plugin for ConveyorPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system_to_stage(CoreStage::Update, update_lines);
+            .add_system_to_stage(CoreStage::Update, update_lines)
+            .add_system_to_stage(CoreStage::PreUpdate, convey_items)
+            .add_system_to_stage(CoreStage::PostUpdate, debug_items);
     }
 }
 
@@ -219,6 +240,46 @@ fn update_lines(
             let from = conveyor.snap_to_conveyor(from_transform.translation);
             let to = conveyor.snap_to_conveyor(to_transform.translation);
             conveyor.spawn_ghostline(from, to, parent);
+        }
+    }
+}
+
+fn convey_items(mut conveyors: Query<&mut Conveyor>) {
+    for mut conveyor in conveyors.iter_mut() {
+        let length = conveyor.length;
+
+        for mut item in conveyor.items.iter_mut() {
+            item.pos += 1;
+            if item.pos >= length {
+                item.pos = item.pos % length;
+            }
+        }
+    }
+}
+
+fn debug_items(conveyors: Query<(&Conveyor, &Transform)>, mut debug: ResMut<DebugLines>) {
+    for (conveyor, transform) in conveyors.iter() {
+        let c_pos = transform.translation;
+        let c_dir = Transform::from_rotation(transform.rotation).mul_vec3(Vec3::Z);
+        let c_normal = Transform::from_rotation(transform.rotation).mul_vec3(Vec3::X);
+        let length_f32 = conveyor.length as f32;
+        // ASSUMPTION: conveyor world length is 1.0, so 0.5 * c_dir is half its main direction
+        let c_start = c_pos - 0.5 * c_dir;
+        let c_end = c_pos + 0.5 * c_dir;
+
+        for item in conveyor.items.iter() {
+            let item_size = item.size as f32 / length_f32;
+            let half_length = 0.5 * item_size * c_dir;
+            let half_width = 0.5 * item_size * c_normal;
+            let linear_item_pos = item.pos as f32 / length_f32;
+            let item_pos = c_start + linear_item_pos * (c_end - c_start);
+            let start = item_pos - half_length;
+            let end = item_pos + half_length;
+
+            debug.line_colored(start - half_width, start + half_width, 0.0, Color::YELLOW);
+            debug.line_colored(end - half_width, end + half_width, 0.0, Color::YELLOW);
+            debug.line_colored(start - half_width, end - half_width, 0.0, Color::YELLOW);
+            debug.line_colored(start + half_width, end + half_width, 0.0, Color::YELLOW);
         }
     }
 }
