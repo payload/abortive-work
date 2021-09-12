@@ -16,6 +16,7 @@ impl Plugin for AugmentationPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system(coin_animation)
+            .add_system_to_stage(CoreStage::PostUpdate, update_transform)
             .insert_resource(AugmentState::default());
     }
 }
@@ -23,7 +24,6 @@ impl Plugin for AugmentationPlugin {
 #[derive(Default)]
 pub struct AugmentState {
     coins: EntityMap,
-    pedestals: EntityMap,
 }
 
 #[derive(SystemParam)]
@@ -31,6 +31,8 @@ pub struct AugmentSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, AugmentAssets>,
     state: ResMut<'w, AugmentState>,
+    with_pedestal: Query<'w, 's, &'static WithPedestal>,
+    transform: Query<'w, 's, &'static Transform>,
 }
 
 impl<'w, 's> AugmentSpawn<'w, 's> {
@@ -58,17 +60,17 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
     }
 
     pub fn add_pedestal(&mut self, entity: Entity) {
-        if self.state.pedestals.get(entity).is_err() {
-            let pedestal = self.spawn_pedestal().id();
-            self.cmds.entity(entity).push_children(&[pedestal]);
-            self.state.pedestals.insert(entity, pedestal);
+        if self.with_pedestal.get(entity).is_err() {
+            let pos = self.transform.get(entity).unwrap().translation;
+            let pedestal = self.spawn_pedestal(pos).id();
+            self.cmds.entity(entity).insert(WithPedestal(pedestal));
         }
     }
 
     pub fn remove_pedestal(&mut self, entity: Entity) {
-        for pedestal in self.state.pedestals.get(entity) {
-            self.cmds.entity(pedestal).despawn_recursive();
-            self.state.pedestals.remove(entity);
+        if let Ok(WithPedestal(pedestal)) = self.with_pedestal.get(entity) {
+            self.cmds.entity(entity).remove::<WithPedestal>();
+            self.cmds.entity(*pedestal).despawn_recursive();
         }
     }
 
@@ -91,7 +93,7 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
         entity_cmds
     }
 
-    pub fn spawn_pedestal<'a>(&'a mut self) -> EntityCommands<'w, 's, 'a> {
+    pub fn spawn_pedestal<'a>(&'a mut self, pos: Vec3) -> EntityCommands<'w, 's, 'a> {
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -103,10 +105,11 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
             .id();
 
         let mut entity_cmds = self.cmds.spawn_bundle((
-            Transform::from_xyz(0.0, 0.0005, 0.0),
+            Transform::from_xyz(pos.x, 0.0, pos.z),
             GlobalTransform::identity(),
+            Pedestal,
         ));
-        entity_cmds.push_children(&[model]).insert(CoinAnimation);
+        entity_cmds.push_children(&[model]);
         entity_cmds
     }
 }
@@ -154,5 +157,23 @@ fn coin_animation(mut query: Query<&mut Transform, With<CoinAnimation>>, time: R
 
     for mut transform in query.iter_mut() {
         transform.rotate(Quat::from_rotation_y(angle));
+    }
+}
+
+struct Pedestal;
+pub struct WithPedestal(Entity);
+
+fn update_transform(
+    augmented: Query<(&Transform, &WithPedestal), Changed<Transform>>,
+    mut augments: Query<&mut Transform, (With<Pedestal>, Without<WithPedestal>)>,
+    mut cmds: Commands,
+) {
+    for (changed, WithPedestal(entity)) in augmented.iter() {
+        if let Ok(mut transform) = augments.get_mut(*entity) {
+            transform.translation.x = changed.translation.x;
+            transform.translation.z = changed.translation.z;
+        } else {
+            cmds.entity(*entity).remove::<WithPedestal>();
+        }
     }
 }
