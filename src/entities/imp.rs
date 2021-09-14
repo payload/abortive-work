@@ -6,7 +6,7 @@ use bevy_prototype_debug_lines::DebugLines;
 
 use crate::{
     entities::StoreIntoPile,
-    systems::{DebugConfig, Destructable, FunnyAnimation, Thing},
+    systems::{BrainPlugin, DebugConfig, Destructable, FunnyAnimation, Thing},
 };
 
 use super::{Boulder, ConveyorBelt};
@@ -180,14 +180,14 @@ use big_brain::prelude::*;
 struct ImpBrainPlugin;
 impl Plugin for ImpBrainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(want_to_dig)
-            .add_system(want_to_store)
-            .add_system(want_to_drop)
+        app.add_system_to_stage(CoreStage::First, want_to_dig)
+            .add_system_to_stage(CoreStage::First, want_to_store)
+            .add_system_to_stage(CoreStage::First, want_to_drop)
             .add_system(do_store)
             .add_system(do_dig)
             .add_system(do_drop)
             .add_system(do_meander)
-            .add_plugin(BigBrainPlugin);
+            .add_plugin(BrainPlugin);
     }
 }
 
@@ -236,7 +236,9 @@ impl ScorerBuilder for WantToDropBuilder {
 struct DoStoreBuilder;
 impl ActionBuilder for DoStoreBuilder {
     fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action).insert(DoStore);
+        cmd.entity(action)
+            .insert(DoStore)
+            .insert(ActionState::Requested);
     }
 }
 
@@ -244,7 +246,9 @@ impl ActionBuilder for DoStoreBuilder {
 struct DoDigBuilder;
 impl ActionBuilder for DoDigBuilder {
     fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action).insert(DoDig);
+        cmd.entity(action)
+            .insert(DoDig)
+            .insert(ActionState::Requested);
     }
 }
 
@@ -252,7 +256,9 @@ impl ActionBuilder for DoDigBuilder {
 struct DoDropBuilder;
 impl ActionBuilder for DoDropBuilder {
     fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action).insert(DoDrop);
+        cmd.entity(action)
+            .insert(DoDrop)
+            .insert(ActionState::Requested);
     }
 }
 
@@ -260,7 +266,9 @@ impl ActionBuilder for DoDropBuilder {
 struct DoMeanderBuilder;
 impl ActionBuilder for DoMeanderBuilder {
     fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action).insert(DoMeander);
+        cmd.entity(action)
+            .insert(DoMeander)
+            .insert(ActionState::Requested);
     }
 }
 
@@ -291,79 +299,107 @@ fn want_to_store(
 
 fn do_store(
     mut imps: Query<(&mut Imp, &Transform)>,
-    mut conveyors: Query<(Entity, &mut ConveyorBelt, &Transform)>,
+    mut belts: Query<(Entity, &mut ConveyorBelt, &Transform)>,
     mut query: Query<(&Actor, &mut ActionState), With<DoStore>>,
     mut cmds: Commands,
     time: Res<Time>,
 ) {
     let dt = time.delta_seconds();
+    let cmds = &mut cmds;
 
     for (Actor(actor), mut state) in query.iter_mut() {
         let imp_entity = *actor;
 
         if let Ok((mut imp, transform)) = imps.get_mut(imp_entity) {
+            let imp = &mut imp;
             let pos = transform.translation;
 
+            fn init(imp: &mut Mut<Imp>, imp_entity: Entity, cmds: &mut Commands) {
+                imp.conveyor = None;
+                imp.work_time = 0.0;
+                imp.walk_destination = WalkDestination::None;
+                cmds.entity(imp_entity).remove::<FunnyAnimation>();
+            }
+
+            fn find(
+                imp: &mut Mut<Imp>,
+                pos: Vec3,
+                belts: &mut Query<(Entity, &mut ConveyorBelt, &Transform)>,
+            ) {
+                imp.conveyor = belts
+                    .iter_mut()
+                    .filter(|(_, it, _)| it.marked_for_thing == imp.load)
+                    .map(|(e, c, t)| (t.translation.distance_squared(pos), e, c, t))
+                    .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less))
+                    .map(|p| p.1);
+
+                imp.work_time = 0.0;
+                imp.walk_destination = imp.conveyor.into();
+            }
+
+            fn execute(
+                imp: &mut Mut<Imp>,
+                belts: &mut Query<(Entity, &mut ConveyorBelt, &Transform)>,
+                state: &mut Mut<ActionState>,
+                pos: Vec3,
+                imp_entity: Entity,
+                cmds: &mut Commands,
+                dt: f32,
+            ) {
+                let state = &mut **state;
+                if let Some((_, mut belt, transform)) =
+                    imp.conveyor.and_then(|e| belts.get_mut(e).ok())
+                {
+                    if belt.marked_for_thing != imp.load {
+                        *state = ActionState::Failure;
+                    } else if imp.load_amount == 0.0 {
+                        imp.load = None;
+
+                        *state = ActionState::Failure;
+                    } else if pos.distance_squared(transform.translation) < 1.0 {
+                        imp.walk_destination = WalkDestination::None;
+
+                        if imp.work_time == 0.0 {
+                            cmds.entity(imp_entity)
+                                .insert(FunnyAnimation { offset: 0.0 });
+                        }
+
+                        imp.work_time += dt;
+                        let thing = imp.load.unwrap();
+
+                        if imp.work_time >= 1.0 && belt.has_space(25) {
+                            imp.remove_thing(thing);
+                            belt.put_thing(thing);
+
+                            init(imp, imp_entity, cmds);
+                            *state = ActionState::Success;
+                        } else {
+                            // not finished yet, but working
+                        }
+                    } else {
+                        // not there yet, but moving
+                    }
+                } else {
+                    *state = ActionState::Failure;
+                }
+            }
+
             match *state {
-                ActionState::Init => {}
+                ActionState::Init => {
+                    init(imp, imp_entity, cmds);
+                }
                 ActionState::Requested => {
-                    imp.conveyor = conveyors
-                        .iter_mut()
-                        .filter(|(_, it, _)| it.marked_for_thing == imp.load)
-                        .map(|(e, c, t)| (t.translation.distance_squared(pos), e, c, t))
-                        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less))
-                        .map(|p| p.1);
-
-                    imp.work_time = 0.0;
-                    imp.walk_destination = imp.conveyor.into();
-
+                    find(imp, pos, &mut belts);
                     *state = ActionState::Executing;
                 }
                 ActionState::Executing => {
-                    if let Some((_, mut belt, transform)) =
-                        imp.conveyor.and_then(|e| conveyors.get_mut(e).ok())
-                    {
-                        if belt.marked_for_thing != imp.load {
-                            *state = ActionState::Failure;
-                        } else if imp.load_amount == 0.0 {
-                            imp.load = None;
-                            *state = ActionState::Failure;
-                        } else if pos.distance_squared(transform.translation) < 1.0 {
-                            imp.walk_destination = WalkDestination::None;
-
-                            if imp.work_time == 0.0 {
-                                cmds.entity(imp_entity)
-                                    .insert(FunnyAnimation { offset: 0.0 });
-                            }
-
-                            imp.work_time += dt;
-                            let thing = imp.load.unwrap();
-
-                            if imp.work_time >= 1.0 && belt.has_space(25) {
-                                imp.remove_thing(thing);
-                                belt.put_thing(thing);
-                                *state = ActionState::Success;
-                            } else {
-                                // not finished yet, but working
-                            }
-                        } else {
-                            // not there yet, but moving
-                        }
-                    } else {
-                        *state = ActionState::Failure;
-                    }
+                    //
+                    execute(imp, &mut belts, &mut state, pos, imp_entity, cmds, dt)
                 }
                 ActionState::Cancelled => {
                     *state = ActionState::Failure;
                 }
-                ActionState::Success | ActionState::Failure => {
-                    if imp.conveyor.is_some() {
-                        imp.conveyor = None;
-                        imp.work_time = 0.0;
-                        imp.walk_destination = WalkDestination::None;
-                        cmds.entity(imp_entity).remove::<FunnyAnimation>();
-                    }
-                }
+                ActionState::Success | ActionState::Failure => {}
             }
         }
     }
@@ -488,6 +524,7 @@ fn do_dig(
             let pos = transform.translation;
 
             match *state {
+                ActionState::Init => {}
                 ActionState::Requested => {
                     imp.boulder = boulders
                         .iter()
@@ -546,7 +583,6 @@ fn do_dig(
                     imp.walk_destination = WalkDestination::None;
                     cmds.entity(*actor).remove::<FunnyAnimation>();
                 }
-                _ => {}
             }
         }
     }
@@ -561,6 +597,7 @@ fn do_meander(
             let pos = transform.translation;
 
             match *state {
+                ActionState::Init => {}
                 ActionState::Requested => {
                     imp.walk_destination = WalkDestination::Vec3(pos + 2.0 * random_vec());
                     *state = ActionState::Executing;
@@ -578,7 +615,7 @@ fn do_meander(
                 ActionState::Success => {
                     imp.walk_destination = WalkDestination::None;
                 }
-                _ => {}
+                ActionState::Failure => {}
             }
         }
     }
