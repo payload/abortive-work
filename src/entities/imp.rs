@@ -63,6 +63,16 @@ impl Imp {
     pub fn maybe_follow(&mut self, entity: Entity) {
         self.want_to_follow = Some(entity);
     }
+
+    pub fn has_thing(&self, thing: Thing) -> bool {
+        self.load == Some(thing) && self.load_amount >= 1.0
+    }
+
+    pub fn remove_thing(&mut self, thing: Thing) {
+        if self.load == Some(thing) && self.load_amount >= 1.0 {
+            self.load_amount -= 1.0;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -289,10 +299,13 @@ fn do_store(
     let dt = time.delta_seconds();
 
     for (Actor(actor), mut state) in query.iter_mut() {
-        if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+        let imp_entity = *actor;
+
+        if let Ok((mut imp, transform)) = imps.get_mut(imp_entity) {
             let pos = transform.translation;
 
             match *state {
+                ActionState::Init => {}
                 ActionState::Requested => {
                     imp.conveyor = conveyors
                         .iter_mut()
@@ -301,23 +314,40 @@ fn do_store(
                         .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less))
                         .map(|p| p.1);
 
+                    imp.work_time = 0.0;
                     imp.walk_destination = imp.conveyor.into();
 
                     *state = ActionState::Executing;
                 }
                 ActionState::Executing => {
-                    if let Some((_entity, conveyor, transform)) =
+                    if let Some((_, mut belt, transform)) =
                         imp.conveyor.and_then(|e| conveyors.get_mut(e).ok())
                     {
-                        if conveyor.marked_for_thing != imp.load {
+                        if belt.marked_for_thing != imp.load {
                             *state = ActionState::Failure;
                         } else if imp.load_amount == 0.0 {
                             imp.load = None;
-                            *state = ActionState::Success;
+                            *state = ActionState::Failure;
                         } else if pos.distance_squared(transform.translation) < 1.0 {
                             imp.walk_destination = WalkDestination::None;
-                            imp.load_amount = (imp.load_amount - dt).max(0.0);
-                            cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
+
+                            if imp.work_time == 0.0 {
+                                cmds.entity(imp_entity)
+                                    .insert(FunnyAnimation { offset: 0.0 });
+                            }
+
+                            imp.work_time += dt;
+                            let thing = imp.load.unwrap();
+
+                            if imp.work_time >= 1.0 && belt.has_space(25) {
+                                imp.remove_thing(thing);
+                                belt.put_thing(thing);
+                                *state = ActionState::Success;
+                            } else {
+                                // not finished yet, but working
+                            }
+                        } else {
+                            // not there yet, but moving
                         }
                     } else {
                         *state = ActionState::Failure;
@@ -327,11 +357,13 @@ fn do_store(
                     *state = ActionState::Failure;
                 }
                 ActionState::Success | ActionState::Failure => {
-                    imp.conveyor = None;
-                    imp.walk_destination = WalkDestination::None;
-                    cmds.entity(*actor).remove::<FunnyAnimation>();
+                    if imp.conveyor.is_some() {
+                        imp.conveyor = None;
+                        imp.work_time = 0.0;
+                        imp.walk_destination = WalkDestination::None;
+                        cmds.entity(imp_entity).remove::<FunnyAnimation>();
+                    }
                 }
-                _ => {}
             }
         }
     }

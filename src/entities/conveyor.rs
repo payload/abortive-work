@@ -45,6 +45,20 @@ impl ConveyorBelt {
             },
         )
     }
+
+    pub fn put_thing(&mut self, thing: Thing) {
+        for pos in self.free_pos(25) {
+            self.items.insert(
+                0,
+                Item {
+                    thing,
+                    amount: 1.0,
+                    size: 25,
+                    pos: pos,
+                },
+            );
+        }
+    }
 }
 
 pub struct ConveyorPlugin;
@@ -375,6 +389,28 @@ struct ConveyorChain {
 impl ConveyorBelt {
     fn left(&self) -> i32 {
         self.items.first().map(|i| i.left()).unwrap_or(self.length)
+    }
+
+    pub fn free_pos(&self, size: i32) -> Option<i32> {
+        if self.items.is_empty() {
+            return Some(size / 2);
+        }
+
+        let mut left = 0;
+        for item in self.items.iter() {
+            let space = item.left() - left;
+
+            if space >= size {
+                return Some(left + size / 2);
+            } else {
+                left = item.right();
+            }
+        }
+        None
+    }
+
+    pub fn has_space(&self, size: i32) -> bool {
+        self.free_pos(size).is_some()
     }
 }
 
