@@ -1,8 +1,4 @@
-use bevy::{
-    ecs::system::SystemParam,
-    input::{keyboard::KeyboardInput, system::exit_on_esc_system, ElementState},
-    prelude::*,
-};
+use bevy::{ecs::system::SystemParam, input::{ElementState, keyboard::KeyboardInput, mouse::MouseWheel, system::exit_on_esc_system}, prelude::*};
 use bevy_egui::egui;
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
@@ -30,6 +26,7 @@ impl Plugin for UserInputPlugin {
             .add_system(update_boulder_marked_for_digging)
             .add_system(player_movement)
             .add_system(update_player)
+            .add_system(camera_zoom_with_mousewheel)
             .insert_resource(UiState::default())
             .init_resource::<DebugConfig>();
     }
@@ -557,5 +554,17 @@ fn update_boulder_marked_for_digging(
 ) {
     for (boulder_entity, boulder) in query.iter() {
         augment.with_pedestal(boulder_entity, boulder.marked_for_digging);
+    }
+}
+
+fn camera_zoom_with_mousewheel(mut events: EventReader<MouseWheel>, mut tracking: Query<&mut CameraTracking>) {
+    let mut y = 0.0;
+
+    for wheel in events.iter() {
+        y += wheel.y;
+    }
+
+    if y != 0.0 {
+        tracking.single_mut().offset.y += y;
     }
 }

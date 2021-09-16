@@ -31,7 +31,7 @@ fn camera_tracking(
 struct MyCamera;
 
 pub struct CameraTracking {
-    offset: Vec3,
+    pub offset: Vec3,
 }
 
 impl CameraTracking {
