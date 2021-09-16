@@ -16,7 +16,7 @@ impl Plugin for AugmentationPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system(coin_animation)
-            .add_system_to_stage(CoreStage::PostUpdate, update_transform)
+            .add_system_to_stage(CoreStage::PostUpdate, update_pedestals)
             .insert_resource(AugmentState::default());
     }
 }
@@ -62,7 +62,7 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
     pub fn add_pedestal(&mut self, entity: Entity) {
         if self.with_pedestal.get(entity).is_err() {
             let pos = self.transform.get(entity).unwrap().translation;
-            let pedestal = self.spawn_pedestal(pos).id();
+            let pedestal = self.spawn_pedestal(Pedestal(entity), pos).id();
             self.cmds.entity(entity).insert(WithPedestal(pedestal));
         }
     }
@@ -93,7 +93,11 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
         entity_cmds
     }
 
-    pub fn spawn_pedestal<'a>(&'a mut self, pos: Vec3) -> EntityCommands<'w, 's, 'a> {
+    pub fn spawn_pedestal<'a>(
+        &'a mut self,
+        pedestal: Pedestal,
+        pos: Vec3,
+    ) -> EntityCommands<'w, 's, 'a> {
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -107,7 +111,7 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
         let mut entity_cmds = self.cmds.spawn_bundle((
             Transform::from_xyz(pos.x, 0.0, pos.z),
             GlobalTransform::identity(),
-            Pedestal,
+            pedestal,
         ));
         entity_cmds.push_children(&[model]);
         entity_cmds
@@ -160,20 +164,24 @@ fn coin_animation(mut query: Query<&mut Transform, With<CoinAnimation>>, time: R
     }
 }
 
-struct Pedestal;
+pub struct Pedestal(Entity);
 pub struct WithPedestal(Entity);
 
-fn update_transform(
-    augmented: Query<(&Transform, &WithPedestal), Changed<Transform>>,
-    mut augments: Query<&mut Transform, (With<Pedestal>, Without<WithPedestal>)>,
+fn update_pedestals(
+    augmented: Query<&Transform, With<WithPedestal>>,
+    mut pedestals: Query<(Entity, &mut Transform, &Pedestal), Without<WithPedestal>>,
     mut cmds: Commands,
 ) {
-    for (changed, WithPedestal(entity)) in augmented.iter() {
-        if let Ok(mut transform) = augments.get_mut(*entity) {
-            transform.translation.x = changed.translation.x;
-            transform.translation.z = changed.translation.z;
+    for (entity, mut transform, pedestal) in pedestals.iter_mut() {
+        if let Ok(augmented_transform) = augmented.get(pedestal.0) {
+            let a = augmented_transform.translation;
+            let b = transform.translation;
+            if a.x != b.x || a.z != b.z {
+                transform.translation.x = a.x;
+                transform.translation.z = a.z;
+            }
         } else {
-            cmds.entity(*entity).remove::<WithPedestal>();
+            cmds.entity(entity).despawn_recursive();
         }
     }
 }

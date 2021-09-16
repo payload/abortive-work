@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{cone, Destructable, FocusObject, Thing};
 
-use super::{BoulderAssets, MageInteractable, NotGround};
+use super::{tree, BoulderAssets, MageInteractable, NotGround};
 
 pub struct Pile {
     pub load: Thing,
@@ -163,6 +163,7 @@ fn update_pile_material(
     piles: Query<(&Pile, &Children), Changed<Pile>>,
     boulder_assets: Res<BoulderAssets>,
     pile_assets: Res<PileAssets>,
+    tree_res: Res<tree::Resource>,
     mut materials: Query<&mut Handle<StandardMaterial>, With<PileModel>>,
 ) {
     let BoulderAssets {
@@ -181,6 +182,7 @@ fn update_pile_material(
             Thing::Iron => iron,
             Thing::Gold => gold,
             Thing::Tool => something,
+            Thing::Wood => &tree_res.material,
         };
 
         for child in children.iter() {

@@ -25,11 +25,10 @@ fn update(
 pub struct InteractWithFocus<'w, 's> {
     focus: Query<'w, 's, &'static Focus>,
     mage: Query<'w, 's, &'static mut Mage>,
-    _trees: Query<'w, 's, &'static tree::Component>,
+    trees: Query<'w, 's, &'static mut tree::Component>,
     boulders: Query<'w, 's, &'static mut Boulder>,
     belts: Query<'w, 's, &'static mut ConveyorBelt>,
     piles: Query<'w, 's, &'static mut Pile>,
-    _cmds: Commands<'w, 's>,
 }
 
 impl<'w, 's> InteractWithFocus<'w, 's> {
@@ -59,6 +58,10 @@ impl<'w, 's> InteractWithFocus<'w, 's> {
             } else {
                 belt.marked_for_thing = None;
             }
+        }
+
+        if let Ok(mut tree) = self.trees.get_mut(entity) {
+            tree.mark_cut_tree = !tree.mark_cut_tree;
         }
     }
 }

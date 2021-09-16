@@ -9,6 +9,7 @@ pub enum Thing {
     Iron,
     Gold,
     Tool,
+    Wood,
 }
 
 #[derive(Default, Clone, Debug)]

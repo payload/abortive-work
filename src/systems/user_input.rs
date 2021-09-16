@@ -7,12 +7,12 @@ use bevy_egui::egui;
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
-use crate::{entities::*, systems::Stack};
+use crate::entities::*;
+use crate::{entities::tree::MarkCutTree, systems::Stack};
 
 use super::{
-    interact_with_focus::{InteractWithFocus, InteractWithFocusEvent},
-    AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, CameraTracking, Destructor, Focus,
-    Store,
+    interact_with_focus::InteractWithFocusEvent, AugmentSpawn, BuildingTool, BuildingToolPlugin,
+    Buildings, CameraTracking, Destructor, Focus, Store,
 };
 
 pub struct UserInputPlugin;
@@ -31,7 +31,7 @@ impl Plugin for UserInputPlugin {
             .add_system(click_imp)
             .add_system(click_smithery)
             .add_system_to_stage(CoreStage::PostUpdate, update_mage_focus)
-            .add_system(update_boulder_marked_for_digging)
+            .add_system(update_pedestals)
             .add_system(player_movement)
             .add_system(update_player)
             .add_system(camera_zoom_with_mousewheel)
@@ -557,12 +557,22 @@ fn update_mage_focus(
     }
 }
 
-fn update_boulder_marked_for_digging(
-    query: Query<(Entity, &Boulder), Changed<Boulder>>,
+fn update_pedestals(
+    boulders: Query<(Entity, &Boulder), Changed<Boulder>>,
+    added_trees: Query<Entity, Added<MarkCutTree>>,
+    removed_trees: RemovedComponents<MarkCutTree>,
     mut augment: AugmentSpawn,
 ) {
-    for (boulder_entity, boulder) in query.iter() {
+    for (boulder_entity, boulder) in boulders.iter() {
         augment.with_pedestal(boulder_entity, boulder.marked_for_digging);
+    }
+
+    for entity in added_trees.iter() {
+        augment.with_pedestal(entity, true);
+    }
+
+    for entity in removed_trees.iter() {
+        augment.with_pedestal(entity, false);
     }
 }
 

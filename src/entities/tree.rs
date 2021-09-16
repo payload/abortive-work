@@ -4,19 +4,41 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use super::{Blocking, NotGround};
 
 #[derive(Default)]
-pub struct Component {}
-
-impl Component {
-    pub fn new() -> Self {
-        Self { ..Self::default() }
-    }
+pub struct Component {
+    pub mass: f32,
+    pub mark_cut_tree: bool,
 }
+
+pub struct Model;
+
+pub struct MarkCutTree;
 
 pub struct Plugin;
 
 impl bevy::prelude::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource)
+            .add_system_to_stage(CoreStage::Last, update_trees);
+    }
+}
+
+impl Component {
+    pub fn new() -> Self {
+        Self {
+            mass: 2.0,
+            ..Self::default()
+        }
+    }
+
+    pub fn cut(&mut self, amount: f32) -> f32 {
+        if amount <= self.mass {
+            self.mass -= amount;
+            amount
+        } else {
+            let mass = self.mass;
+            self.mass = 0.0;
+            mass
+        }
     }
 }
 
@@ -25,8 +47,6 @@ pub struct Spawn<'w, 's> {
     cmds: Commands<'w, 's>,
     res: Res<'w, Resource>,
 }
-
-pub struct Model;
 
 impl<'w, 's> Spawn<'w, 's> {
     pub fn spawn(&mut self, component: Component, transform: Transform) {
@@ -69,6 +89,7 @@ impl<'w, 's> Spawn<'w, 's> {
                 transform,
                 GlobalTransform::identity(),
                 Destructable,
+                FocusObject,
             ))
             .push_children(&[model]);
     }
@@ -103,4 +124,21 @@ fn init_resource(
             .into(),
         ),
     });
+}
+
+fn update_trees(
+    trees: Query<(Entity, &Component, Option<&MarkCutTree>), Changed<Component>>,
+    mut cmds: Commands,
+) {
+    for (entity, tree, mark) in trees.iter() {
+        if tree.mass <= 0.0 {
+            cmds.entity(entity).despawn_recursive();
+        }
+
+        if tree.mark_cut_tree && mark.is_none() {
+            cmds.entity(entity).insert(MarkCutTree);
+        } else if !tree.mark_cut_tree && mark.is_some() {
+            cmds.entity(entity).remove::<MarkCutTree>();
+        }
+    }
 }

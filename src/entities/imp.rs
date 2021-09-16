@@ -9,9 +9,12 @@ use crate::{
     systems::{BrainPlugin, DebugConfig, Destructable, FunnyAnimation, Thing},
 };
 
-use super::{Boulder, ConveyorBelt};
+use super::{
+    tree::{self, MarkCutTree},
+    Boulder, ConveyorBelt,
+};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Imp {
     pub idle_time: f32,
     pub idle_new_direction_time: f32,
@@ -23,6 +26,7 @@ pub struct Imp {
     pub idle_complete: bool,
     pub boulder: Option<Entity>,
     pub conveyor: Option<Entity>,
+    pub tree: Option<Entity>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -49,23 +53,13 @@ impl Imp {
         Self {
             idle_time: 1.0,
             idle_new_direction_time: 1.0,
-            work_time: 0.0,
-            load_amount: 0.0,
-            load: None,
             walk_destination: WalkDestination::None,
-            want_to_follow: None,
-            idle_complete: false,
-            boulder: None,
-            conveyor: None,
+            ..Self::default()
         }
     }
 
     pub fn maybe_follow(&mut self, entity: Entity) {
         self.want_to_follow = Some(entity);
-    }
-
-    pub fn has_thing(&self, thing: Thing) -> bool {
-        self.load == Some(thing) && self.load_amount >= 1.0
     }
 
     pub fn remove_thing(&mut self, thing: Thing) {
@@ -183,7 +177,9 @@ impl Plugin for ImpBrainPlugin {
         app.add_system_to_stage(CoreStage::First, want_to_dig)
             .add_system_to_stage(CoreStage::First, want_to_store)
             .add_system_to_stage(CoreStage::First, want_to_drop)
+            .add_system_to_stage(CoreStage::First, want_to_cut_tree)
             .add_system(do_store)
+            .add_system(do_cut_tree)
             .add_system(do_dig)
             .add_system(do_drop)
             .add_system(do_meander)
@@ -195,15 +191,18 @@ fn brain() -> ThinkerBuilder {
     Thinker::build()
         .picker(FirstToScore { threshold: 0.8 })
         .when(WantToStoreBuilder, DoStoreBuilder)
+        .when(WantToCutTreeBuilder, DoCutTreeBuilder)
         .when(WantToDigBuilder, DoDigBuilder)
         .when(WantToDropBuilder, DoDropBuilder)
         .otherwise(DoMeanderBuilder)
 }
 
 struct WantToStore;
+struct WantToCutTree;
 struct WantToDig;
 struct WantToDrop;
 struct DoStore;
+struct DoCutTree;
 struct DoDig;
 struct DoDrop;
 struct DoMeander;
@@ -213,6 +212,14 @@ struct WantToStoreBuilder;
 impl ScorerBuilder for WantToStoreBuilder {
     fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
         cmd.entity(scorer).insert(WantToStore);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct WantToCutTreeBuilder;
+impl ScorerBuilder for WantToCutTreeBuilder {
+    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+        cmd.entity(scorer).insert(WantToCutTree);
     }
 }
 
@@ -238,6 +245,16 @@ impl ActionBuilder for DoStoreBuilder {
     fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
         cmd.entity(action)
             .insert(DoStore)
+            .insert(ActionState::Requested);
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DoCutTreeBuilder;
+impl ActionBuilder for DoCutTreeBuilder {
+    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
+        cmd.entity(action)
+            .insert(DoCutTree)
             .insert(ActionState::Requested);
     }
 }
@@ -651,6 +668,92 @@ fn debug_lines(
 
         if let Some(dest) = dest {
             debug.line_colored(pos, dest, 0.0, Color::BLUE);
+        }
+    }
+}
+
+fn want_to_cut_tree(
+    imps: Query<&Imp>,
+    trees: Query<&tree::Component, With<MarkCutTree>>,
+    mut query: Query<(&Actor, &mut Score), With<WantToCutTree>>,
+) {
+    let trees_count = trees.iter().count();
+
+    for (Actor(actor), mut score) in query.iter_mut() {
+        let imp = imps.get(*actor).unwrap();
+
+        if trees_count > 0
+            && (imp.load == None || imp.load == Some(Thing::Wood) && imp.load_amount < 1.0)
+        {
+            score.set(1.0);
+        } else {
+            score.set(0.0);
+        }
+    }
+}
+
+fn do_cut_tree(
+    mut imps: Query<(&mut Imp, &Transform)>,
+    mut trees: Query<(Entity, &mut tree::Component, &Transform), With<MarkCutTree>>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoCutTree>>,
+    time: Res<Time>,
+    mut cmds: Commands,
+) {
+    let dt = time.delta_seconds();
+
+    for (Actor(actor), mut state) in query.iter_mut() {
+        if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+            let pos = transform.translation;
+
+            if *state == ActionState::Requested {
+                imp.tree = trees
+                    .iter_mut()
+                    .map(|(entity, _, transform)| {
+                        (entity, pos.distance_squared(transform.translation))
+                    })
+                    .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
+                    .map(|(e, _)| e);
+
+                imp.walk_destination = imp.tree.into();
+
+                *state = ActionState::Executing;
+            }
+
+            if *state == ActionState::Cancelled {
+                if imp.load_amount < 1.0 {
+                    *state = ActionState::Failure;
+                } else {
+                    *state = ActionState::Success;
+                }
+            }
+
+            if *state == ActionState::Executing {
+                if let Some(entity) = imp.tree {
+                    if let Ok((_, mut t, transform)) = trees.get_mut(entity) {
+                        if imp.load_amount < 1.0 {
+                            if pos.distance_squared(transform.translation) < 1.0 {
+                                let mass = t.cut(dt);
+                                imp.walk_destination = WalkDestination::None;
+                                imp.load = Some(Thing::Wood);
+                                imp.load_amount += mass;
+                                cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
+                            }
+                        } else {
+                            *state = ActionState::Success;
+                        }
+                    } else {
+                        *state = ActionState::Failure;
+                    }
+                } else {
+                    *state = ActionState::Failure;
+                }
+            }
+
+            if *state == ActionState::Failure || *state == ActionState::Success {
+                imp.tree = None;
+                imp.walk_destination = WalkDestination::None;
+                cmds.entity(*actor).remove::<FunnyAnimation>();
+            }
         }
     }
 }
