@@ -20,6 +20,7 @@ fn main() {
         .add_plugin(CameraPlugin)
         .add_plugin(AugmentationPlugin)
         .add_plugin(FocusPlugin)
+        .add_plugin(SystemsPlugin)
         .add_plugin(DebugLinesPlugin)
         .add_startup_system(spawn_level_1)
         .run();
@@ -52,6 +53,7 @@ fn spawn_level_1(
     mut fireplace: FireplaceSpawn,
     mut pile: PileSpawn,
     mut conveyor: ConveyorSpawn,
+    mut trees: tree::Spawn,
 ) {
     use BoulderMaterial::*;
 
@@ -73,8 +75,17 @@ fn spawn_level_1(
             let z = y as f32;
             let transform = Transform::from_xyz(x + hx, 0.0, z + hz);
 
-            if v > 0.3 && 0.4 > v {
-                boulder.spawn(Boulder::new(Stone), transform);
+            if v < 0.1 {
+                if fastrand::f32() < 0.1 {
+                    trees.spawn(tree::Component::new(), transform);
+                }
+            }
+            else if v > 0.3 && 0.4 > v {
+                if fastrand::f32() < 0.8 {
+                    boulder.spawn(Boulder::new(Stone), transform);
+                } else {
+                    boulder.spawn(Boulder::new(Coal), transform);
+                }
             } else if v > 0.4 && 0.45 > v {
                 boulder.spawn(Boulder::new(Coal), transform);
             } else if v > 0.45 && 0.47 > v {
