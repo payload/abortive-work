@@ -5,7 +5,7 @@ pub use bevy_mod_picking::*;
 
 use crate::{entities::*, systems::Stack};
 
-use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, Destructor, Focus, Store};
+use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, CameraTracking, Destructor, Focus, Store, interact_with_focus::{InteractWithFocus, InteractWithFocusEvent}};
 
 pub struct UserInputPlugin;
 
@@ -159,8 +159,9 @@ fn update_player(
     mut imp: ImpSpawn,
     mut boulder: BoulderSpawn,
     mut destructor: Destructor,
+    mut interact_with_focus: EventWriter<InteractWithFocusEvent>,
 ) {
-    let (mage_entity, mage_transform, mut mage, focus) = mage.single_mut();
+    let (mage_entity, mage_transform, _mage, focus) = mage.single_mut();
 
     match state.mode {
         UiMode::None => {
@@ -171,7 +172,7 @@ fn update_player(
                 state.mode = UiMode::DestructTool;
             }
             if input.just_pressed(KeyCode::E) {
-                mage.interact_with_focus = true;
+                interact_with_focus.send(InteractWithFocusEvent);
             }
         }
         UiMode::DestructTool => {
