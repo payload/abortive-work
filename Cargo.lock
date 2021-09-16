@@ -734,7 +734,7 @@ dependencies = [
 [[package]]
 name = "big-brain"
 version = "0.6.0"
-source = "git+https://github.com/payload/big-brain.git#993be812be0fc7abbd8b3206388dde8a4c5562c5"
+source = "git+https://github.com/payload/big-brain.git#3e4748c3cb6a7e0bffb01e3c0de16a997b56314b"
 dependencies = [
  "bevy",
 ]
