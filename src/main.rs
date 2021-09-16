@@ -79,8 +79,7 @@ fn spawn_level_1(
                 if fastrand::f32() < 0.1 {
                     trees.spawn(tree::Component::new(), transform);
                 }
-            }
-            else if v > 0.3 && 0.4 > v {
+            } else if v > 0.3 && 0.4 > v {
                 if fastrand::f32() < 0.8 {
                     boulder.spawn(Boulder::new(Stone), transform);
                 } else {

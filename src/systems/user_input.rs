@@ -1,11 +1,19 @@
-use bevy::{ecs::system::SystemParam, input::{ElementState, keyboard::KeyboardInput, mouse::MouseWheel, system::exit_on_esc_system}, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    input::{keyboard::KeyboardInput, mouse::MouseWheel, system::exit_on_esc_system, ElementState},
+    prelude::*,
+};
 use bevy_egui::egui;
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
 use crate::{entities::*, systems::Stack};
 
-use super::{AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, CameraTracking, Destructor, Focus, Store, interact_with_focus::{InteractWithFocus, InteractWithFocusEvent}};
+use super::{
+    interact_with_focus::{InteractWithFocus, InteractWithFocusEvent},
+    AugmentSpawn, BuildingTool, BuildingToolPlugin, Buildings, CameraTracking, Destructor, Focus,
+    Store,
+};
 
 pub struct UserInputPlugin;
 
@@ -558,7 +566,10 @@ fn update_boulder_marked_for_digging(
     }
 }
 
-fn camera_zoom_with_mousewheel(mut events: EventReader<MouseWheel>, mut tracking: Query<&mut CameraTracking>) {
+fn camera_zoom_with_mousewheel(
+    mut events: EventReader<MouseWheel>,
+    mut tracking: Query<&mut CameraTracking>,
+) {
     let mut y = 0.0;
 
     for wheel in events.iter() {

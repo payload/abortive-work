@@ -7,13 +7,15 @@ use super::Focus;
 pub struct ModPlugin;
 impl Plugin for ModPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<InteractWithFocusEvent>()
-            .add_system(update);
+        app.add_event::<InteractWithFocusEvent>().add_system(update);
     }
 }
 pub struct InteractWithFocusEvent;
 
-fn update(mut interact_with_focus: InteractWithFocus, mut events: EventReader<InteractWithFocusEvent>) {
+fn update(
+    mut interact_with_focus: InteractWithFocus,
+    mut events: EventReader<InteractWithFocusEvent>,
+) {
     for _ in events.iter() {
         interact_with_focus.interact();
     }
