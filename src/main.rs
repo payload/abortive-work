@@ -118,8 +118,11 @@ fn spawn_level_1(
 
     fireplace.spawn(Fireplace::new(), at(0, 0));
 
-    pile.spawn(Pile::new(Thing::Stone, 1.0), at(0, 1));
-    ritual_sites.spawn(RitualSite::new(), at(-7, -3));
+    pile.spawn(Pile::new(Thing::Iron, 10.0), at(0, 1));
+    ritual_sites.spawn(
+        RitualSite::new(&[(Thing::Iron, 300), (Thing::Gold, 300)]),
+        at(-7, -3),
+    );
 
     conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3), pos(-3, -13)], None);
 }

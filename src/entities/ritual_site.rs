@@ -1,20 +1,43 @@
 use crate::systems::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
+use super::Pile;
+
 #[derive(Default)]
-pub struct RitualSite {}
+pub struct RitualSite {
+    pub needs: Vec<Need>,
+    pub radius: f32,
+}
+pub struct Need {
+    pub what: Thing,
+    pub needed: u32,
+    pub available: u32,
+}
 pub struct Model;
 pub struct Plugin;
 
 impl bevy::prelude::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource)
+            .add_system(update);
     }
 }
 
 impl RitualSite {
-    pub fn new() -> Self {
-        Self { ..Self::default() }
+    pub fn new(needs: &[(Thing, u32)]) -> Self {
+        Self {
+            needs: needs
+                .iter()
+                .copied()
+                .map(|(what, needed)| Need {
+                    what,
+                    needed,
+                    available: 0,
+                })
+                .collect(),
+            radius: 2.0,
+            ..Self::default()
+        }
     }
 }
 
@@ -43,6 +66,7 @@ impl<'w, 's> Spawn<'w, 's> {
                 transform,
                 GlobalTransform::identity(),
                 Destructable,
+                FocusObject,
             ))
             .push_children(&[model]);
     }
@@ -74,4 +98,26 @@ fn init_resource(
         }),
         mesh: meshes.add(disk(1.0, 24)),
     });
+}
+
+fn update(mut sites: Query<(&mut RitualSite, &Transform)>, piles: Query<(&Pile, &Transform)>) {
+    let piles_near = |pos, radius_sqr| {
+        piles
+            .iter()
+            .filter(move |(_, t)| t.translation.distance_squared(pos) <= radius_sqr)
+    };
+
+    for (mut site, site_transform) in sites.iter_mut() {
+        for need in site.needs.iter_mut() {
+            need.available = 0;
+        }
+
+        for (pile, _pile_transform) in piles_near(site_transform.translation, site.radius) {
+            for need in site.needs.iter_mut() {
+                if pile.load == need.what {
+                    need.available += pile.amount as u32;
+                }
+            }
+        }
+    }
 }

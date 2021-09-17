@@ -30,8 +30,8 @@ pub use pile::*;
 mod conveyor;
 pub use conveyor::*;
 
-pub mod tree;
 pub mod ritual_site;
+pub mod tree;
 
 pub struct NotGround;
 pub struct Blocking;

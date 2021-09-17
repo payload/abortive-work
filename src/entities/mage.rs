@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{Focus, Stack, Thing};
 
-use super::{Boulder, ConveyorBelt, NotGround, Pile};
+use super::{Boulder, ConveyorBelt, NotGround, Pile, StoreIntoPile};
 
 #[derive(Default)]
 pub struct Mage {
@@ -172,6 +172,27 @@ fn update(
                         conveyor.marked_for_thing = None;
                     }
                 }
+            }
+        }
+    }
+}
+
+impl Mage {
+    pub fn try_drop_item(&mut self, transform: &Transform, cmds: &mut Commands) {
+        for stack in self.inventory.iter_mut() {
+            if stack.amount >= 1.0 {
+                stack.amount -= 1.0;
+
+                cmds.spawn_bundle((
+                    StoreIntoPile {
+                        load: stack.thing.unwrap(),
+                        amount: 1.0,
+                        pile: None,
+                    },
+                    transform.clone(),
+                ));
+
+                break;
             }
         }
     }

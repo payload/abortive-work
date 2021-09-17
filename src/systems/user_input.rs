@@ -7,6 +7,7 @@ use bevy_egui::egui;
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
+use crate::entities::ritual_site::RitualSite;
 use crate::entities::*;
 use crate::{entities::tree::MarkCutTree, systems::Stack};
 
@@ -169,7 +170,7 @@ fn update_player(
     mut destructor: Destructor,
     mut interact_with_focus: EventWriter<InteractWithFocusEvent>,
 ) {
-    let (mage_entity, mage_transform, _mage, focus) = mage.single_mut();
+    let (mage_entity, mage_transform, mut mage, focus) = mage.single_mut();
 
     match state.mode {
         UiMode::None => {
@@ -181,6 +182,9 @@ fn update_player(
             }
             if input.just_pressed(KeyCode::E) {
                 interact_with_focus.send(InteractWithFocusEvent);
+            }
+            if input.just_pressed(KeyCode::O) {
+                mage.try_drop_item(mage_transform, &mut cmds);
             }
         }
         UiMode::DestructTool => {
@@ -484,6 +488,7 @@ pub struct Details<'w, 's> {
     conveyor: Query<'w, 's, &'static ConveyorBelt>,
     boulder: Query<'w, 's, &'static Boulder>,
     pile: Query<'w, 's, &'static Pile>,
+    ritual_site: Query<'w, 's, &'static RitualSite>,
 }
 
 impl<'w, 's> Details<'w, 's> {
@@ -527,6 +532,13 @@ impl<'w, 's> Details<'w, 's> {
                     )
                 } else if let Ok(pile) = self.pile.get(entity) {
                     format!("Pile of {:.1} {:?}. (E) take one", pile.amount, pile.load)
+                } else if let Ok(site) = self.ritual_site.get(entity) {
+                    let needs: String = site
+                        .needs
+                        .iter()
+                        .map(|need| format!("{}/{} {:?} ", need.available, need.needed, need.what))
+                        .collect();
+                    format!("Ritual site with following thing requested:\n{}", needs)
                 } else {
                     String::new()
                 }
