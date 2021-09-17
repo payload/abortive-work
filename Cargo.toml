@@ -10,7 +10,7 @@ fastrand = "1.5"
 noice = "0.7.1"
 sm = "0.9.0"
 
-bevy = {git = "https://github.com/bevyengine/bevy"}
+bevy = {git = "https://github.com/bevyengine/bevy", features = ["default", "jpeg", "bevy_dylib"]}
 bevy_egui = {git = "https://github.com/jakobhellermann/bevy_egui", branch = "bevy-main"}
 bevy_mod_picking = {git = "https://github.com/JulianRuiseco/bevy_mod_picking"}
 big-brain = {git = "https://github.com/payload/big-brain.git"}

@@ -2,7 +2,7 @@ use crate::systems::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 #[derive(Default)]
-pub struct Component {}
+pub struct RitualSite {}
 pub struct Model;
 pub struct Plugin;
 
@@ -12,7 +12,7 @@ impl bevy::prelude::Plugin for Plugin {
     }
 }
 
-impl Component {
+impl RitualSite {
     pub fn new() -> Self {
         Self { ..Self::default() }
     }
@@ -25,7 +25,7 @@ pub struct Spawn<'w, 's> {
 }
 
 impl<'w, 's> Spawn<'w, 's> {
-    pub fn spawn(&mut self, component: Component, transform: Transform) {
+    pub fn spawn(&mut self, component: RitualSite, transform: Transform) {
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -59,16 +59,19 @@ fn init_resource(
     mut cmds: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    assets: ResMut<AssetServer>,
 ) {
     cmds.insert_resource(Resource {
-        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        transform: Transform {
+            rotation: Quat::IDENTITY,
+            translation: Vec3::new(0.0, 0.005, 0.0),
+            scale: Vec3::ONE,
+        },
         material: materials.add(StandardMaterial {
-            base_color: Color::PINK,
-            reflectance: 0.0,
-            roughness: 1.0,
-            metallic: 0.0,
+            base_color_texture: Some(assets.load("nebra4.jpg")),
+            unlit: true,
             ..Default::default()
         }),
-        mesh: meshes.add(shape::Capsule::default().into()),
+        mesh: meshes.add(disk(1.0, 24)),
     });
 }

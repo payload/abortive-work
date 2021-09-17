@@ -31,6 +31,7 @@ mod conveyor;
 pub use conveyor::*;
 
 pub mod tree;
+pub mod ritual_site;
 
 pub struct NotGround;
 pub struct Blocking;
@@ -48,6 +49,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(PilePlugin)
             .add_plugin(ConveyorPlugin)
             .add_plugin(tree::Plugin)
+            .add_plugin(ritual_site::Plugin)
             .add_plugin(GroundPlugin);
     }
 }

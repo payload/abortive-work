@@ -20,7 +20,7 @@ pub fn disk(radius: f32, segments: u16) -> Mesh {
         let x = a.cos() * radius;
         let z = a.sin() * radius;
         let u = (a.cos() + 1.0) * 0.5;
-        let v = (a.cos() + 1.0) * 0.5;
+        let v = (a.sin() + 1.0) * 0.5;
 
         positions.push([x, 0.0, z]);
         normals.push([0.0, 1.0, 0.0]);
