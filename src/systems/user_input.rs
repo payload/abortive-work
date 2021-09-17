@@ -507,6 +507,16 @@ impl<'w, 's> Details<'w, 's> {
                 .unwrap_or_default(),
         );
 
+        ui.heading("Ritual");
+        ui.label(if let Ok(site) = self.ritual_site.get_single() {
+            site.needs
+                .iter()
+                .map(|need| format!("{}/{} {:?} ", need.available, need.needed, need.what))
+                .collect()
+        } else {
+            String::new()
+        });
+
         ui.heading("Focus");
         ui.label(
             if let Some(entity) = self.focus.get_single().ok().and_then(|focus| focus.entity) {
