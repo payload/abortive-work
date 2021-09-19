@@ -182,8 +182,9 @@ impl Plugin for ImpBrainPlugin {
             .add_system(do_dig)
             .add_system(do_drop)
             .add_system(do_meander)
-            .add_system(move_near_to)
+            .add_system(do_move_near_to)
             .add_system(do_cut_tree)
+            .add_system(do_find_tree)
             .add_plugin(BrainPlugin);
     }
 }
@@ -194,7 +195,10 @@ fn brain() -> ThinkerBuilder {
         .when(WantToStore, DoStore)
         .when(
             WantToCutTree,
-            Steps::build().step(MoveNearTo).step(DoCutTree),
+            Steps::build()
+                .step(DoFindTree)
+                .step(DoMoveNearTo)
+                .step(DoCutTree),
         )
         .when(WantToDig, DoDig)
         .when(WantToDrop, DoDrop)
@@ -212,7 +216,8 @@ struct DoCutTree;
 struct DoDig;
 struct DoDrop;
 struct DoMeander;
-struct MoveNearTo;
+struct DoFindTree;
+struct DoMoveNearTo;
 
 macro_rules! trivial_scorer_builder {
     ($component: ident) => {
@@ -246,7 +251,8 @@ trivial_action_builder!(DoDig);
 trivial_action_builder!(DoDrop);
 trivial_action_builder!(DoCutTree);
 trivial_action_builder!(DoMeander);
-trivial_action_builder!(MoveNearTo);
+trivial_action_builder!(DoFindTree);
+trivial_action_builder!(DoMoveNearTo);
 
 ////////
 
@@ -412,8 +418,8 @@ fn do_drop(
                 ActionState::Executing => {
                     if let WalkDestination::Vec3(dest) = imp.walk_destination {
                         if pos.distance_squared(dest) < 0.1 {
-                            let drop_amount = imp.load_amount.max(1.0);
-                            imp.load_amount = imp.load_amount - drop_amount;
+                            let drop_amount = imp.load_amount;
+                            imp.load_amount -= drop_amount;
 
                             cmds.spawn_bundle((
                                 StoreIntoPile {
@@ -653,47 +659,38 @@ fn want_to_cut_tree(
     }
 }
 
-fn move_near_to(
+fn do_move_near_to(
     mut imps: Query<(&mut Imp, &Transform)>,
-    mut trees: Query<(Entity, &Transform), With<MarkCutTree>>,
-    mut query: Query<(&Actor, &mut ActionState), With<MoveNearTo>>,
+    transforms: Query<&Transform>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoMoveNearTo>>,
 ) {
+    use ActionState::*;
     query.for_each_mut(|(Actor(actor), mut state)| {
-        if *state == ActionState::Requested {
-            if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
-                let pos = transform.translation;
-                let tree = trees
-                    .iter_mut()
-                    .map(|(entity, transform)| {
-                        (entity, pos.distance_squared(transform.translation))
-                    })
-                    .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
-                    .map(|(e, _)| e);
-                imp.tree = tree;
-                imp.walk_destination = tree.into();
-            }
-            *state = ActionState::Executing;
-        }
-        if *state == ActionState::Cancelled {
-            *state = ActionState::Failure;
-        }
-        if *state == ActionState::Executing {
+        if *state == Requested || *state == Executing {
             let imp = imps.get_mut(*actor).ok();
-            let tree = imp
+
+            let destination = imp
                 .as_ref()
-                .and_then(|imp| imp.0.tree.clone())
-                .and_then(|tree| trees.get_mut(tree).ok());
-            *state = if let (Some(imp), Some(tree)) = (imp, tree) {
-                if imp.1.translation.distance_squared(tree.1.translation) > 1.0 {
-                    ActionState::Executing
+                .and_then(|imp| match imp.0.walk_destination {
+                    WalkDestination::Entity(entity) => Some(entity),
+                    _ => None,
+                })
+                .and_then(|destination| transforms.get(destination).ok());
+
+            *state = if let (Some(imp), Some(destination)) = (imp, destination) {
+                if imp.1.translation.distance_squared(destination.translation) > 1.0 {
+                    Executing
                 } else {
-                    ActionState::Success
+                    Success
                 }
             } else {
-                ActionState::Failure
+                Failure
             };
         }
-        if *state == ActionState::Failure || *state == ActionState::Success {
+        if *state == Cancelled {
+            *state = Failure;
+        }
+        if *state == Failure || *state == Success {
             if let Ok((mut imp, _)) = imps.get_mut(*actor) {
                 imp.walk_destination = WalkDestination::None;
             }
@@ -709,13 +706,7 @@ fn do_cut_tree(
     mut cmds: Commands,
 ) {
     query.for_each_mut(|(Actor(actor), mut state)| {
-        if *state == ActionState::Requested {
-            *state = ActionState::Executing;
-        }
-        if *state == ActionState::Cancelled {
-            *state = ActionState::Failure;
-        }
-        if *state == ActionState::Executing {
+        if *state == ActionState::Requested || *state == ActionState::Executing {
             let imp = imps.get_mut(*actor).ok();
             let tree = imp
                 .as_ref()
@@ -724,7 +715,7 @@ fn do_cut_tree(
             *state = if let (Some(mut imp), Some(mut tree)) = (imp, tree) {
                 let mass = tree.cut(time.delta_seconds());
                 imp.load = Some(Thing::Wood);
-                imp.load_amount += mass;
+                imp.load_amount = (imp.load_amount + mass).min(1.0);
 
                 if imp.load_amount < 1.0 {
                     ActionState::Executing
@@ -735,11 +726,49 @@ fn do_cut_tree(
                 ActionState::Failure
             };
         }
+        if *state == ActionState::Cancelled {
+            *state = ActionState::Failure;
+        }
         if *state == ActionState::Failure || *state == ActionState::Success {
             cmds.entity(*actor).remove::<FunnyAnimation>();
             if let Ok(mut imp) = imps.get_mut(*actor) {
                 imp.tree = None;
             }
         }
+    });
+}
+
+fn do_find_tree(
+    mut imps: Query<(&mut Imp, &Transform)>,
+    mut trees: Query<(Entity, &Transform), With<MarkCutTree>>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoFindTree>>,
+) {
+    use ActionState::*;
+    query.for_each_mut(|(Actor(actor), mut state)| {
+        *state = if *state == Requested {
+            if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+                let pos = transform.translation;
+                let tree = trees
+                    .iter_mut()
+                    .map(|(entity, transform)| {
+                        (entity, pos.distance_squared(transform.translation))
+                    })
+                    .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
+                    .map(|(e, _)| e);
+
+                imp.tree = tree;
+                imp.walk_destination = tree.into();
+
+                if imp.tree.is_some() {
+                    Success
+                } else {
+                    Failure
+                }
+            } else {
+                Failure
+            }
+        } else {
+            Failure
+        };
     });
 }
