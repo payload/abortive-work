@@ -185,6 +185,7 @@ impl Plugin for ImpBrainPlugin {
             .add_system(do_move_near_to)
             .add_system(do_cut_tree)
             .add_system(do_find_tree)
+            .add_system(do_find_boulder)
             .add_plugin(BrainPlugin);
     }
 }
@@ -200,27 +201,20 @@ fn brain() -> ThinkerBuilder {
                 .step(DoMoveNearTo)
                 .step(DoCutTree),
         )
-        .when(WantToDig, DoDig)
+        .when(
+            WantToDig,
+            Steps::build()
+                .step(DoFindBoulder)
+                .step(DoMoveNearTo)
+                .step(DoDig),
+        )
         .when(WantToDrop, DoDrop)
         .otherwise(DoMeander)
 }
 
-struct WantToStore;
-
-struct WantToCutTree;
-struct WantToDig;
-struct WantToDrop;
-
-struct DoStore;
-struct DoCutTree;
-struct DoDig;
-struct DoDrop;
-struct DoMeander;
-struct DoFindTree;
-struct DoMoveNearTo;
-
-macro_rules! trivial_scorer_builder {
+macro_rules! trivial_scorer {
     ($component: ident) => {
+        struct $component;
         impl ScorerBuilder for $component {
             fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
                 cmd.entity(scorer).insert(Self);
@@ -229,8 +223,9 @@ macro_rules! trivial_scorer_builder {
     };
 }
 
-macro_rules! trivial_action_builder {
+macro_rules! trivial_action {
     ($component: ident) => {
+        struct $component;
         impl ActionBuilder for $component {
             fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
                 cmd.entity(scorer)
@@ -241,18 +236,19 @@ macro_rules! trivial_action_builder {
     };
 }
 
-trivial_scorer_builder!(WantToStore);
-trivial_scorer_builder!(WantToCutTree);
-trivial_scorer_builder!(WantToDig);
-trivial_scorer_builder!(WantToDrop);
+trivial_scorer!(WantToStore);
+trivial_scorer!(WantToCutTree);
+trivial_scorer!(WantToDig);
+trivial_scorer!(WantToDrop);
 
-trivial_action_builder!(DoStore);
-trivial_action_builder!(DoDig);
-trivial_action_builder!(DoDrop);
-trivial_action_builder!(DoCutTree);
-trivial_action_builder!(DoMeander);
-trivial_action_builder!(DoFindTree);
-trivial_action_builder!(DoMoveNearTo);
+trivial_action!(DoStore);
+trivial_action!(DoDig);
+trivial_action!(DoDrop);
+trivial_action!(DoCutTree);
+trivial_action!(DoMeander);
+trivial_action!(DoFindTree);
+trivial_action!(DoFindBoulder);
+trivial_action!(DoMoveNearTo);
 
 ////////
 
@@ -492,79 +488,75 @@ fn want_to_dig(
     }
 }
 
-fn do_dig(
+fn do_find_boulder(
     mut imps: Query<(&mut Imp, &Transform)>,
     boulders: Query<(Entity, &Boulder, &Transform)>,
+    mut query: Query<(&Actor, &mut ActionState), With<DoFindBoulder>>,
+) {
+    use ActionState::*;
+    query.for_each_mut(|(Actor(actor), mut state)| {
+        let found = if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+            let pos = transform.translation;
+            let found = boulders
+                .iter()
+                .filter(|(_, boulder, _)| boulder.marked_for_digging)
+                .filter(|(_, boulder, _)| {
+                    imp.load.is_none() || imp.load == Some(boulder.material.into())
+                })
+                .map(|(entity, _, transform)| (entity, pos.distance_squared(transform.translation)))
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
+                .map(|(e, _)| e);
+
+            imp.boulder = found;
+            imp.walk_destination = found.into();
+            found.is_some()
+        } else {
+            false
+        };
+        *state = if found { Success } else { Failure };
+    });
+}
+
+fn do_dig(
+    mut imps: Query<&mut Imp>,
+    boulders: Query<(Entity, &Boulder)>,
     mut query: Query<(&Actor, &mut ActionState), With<DoDig>>,
     time: Res<Time>,
     mut cmds: Commands,
 ) {
-    let dt = time.delta_seconds();
-
+    use ActionState::*;
     for (Actor(actor), mut state) in query.iter_mut() {
-        if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
-            let pos = transform.translation;
-
-            match *state {
-                ActionState::Init => {}
-                ActionState::Requested => {
-                    imp.boulder = boulders
-                        .iter()
-                        .filter(|(_, boulder, _)| boulder.marked_for_digging)
-                        .filter(|(_, boulder, _)| {
-                            imp.load.is_none() || imp.load == Some(boulder.material.into())
-                        })
-                        .map(|(entity, _, transform)| {
-                            (entity, pos.distance_squared(transform.translation))
-                        })
-                        .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
-                        .map(|(e, _)| e);
-
-                    imp.walk_destination = imp.boulder.into();
-
-                    *state = ActionState::Executing;
-                }
-                ActionState::Executing => {
-                    if let Some(entity) = imp.boulder {
-                        if let Ok((_, boulder, transform)) = boulders.get(entity) {
-                            let material = Some(boulder.material.into());
-
-                            if !boulder.marked_for_digging {
-                                *state = ActionState::Failure;
-                            } else if imp.load.is_some() && imp.load != material {
-                                *state = ActionState::Failure;
-                            } else if imp.load_amount < 1.0 {
-                                if imp.load.is_none() {
-                                    imp.load = material;
-                                }
-
-                                if pos.distance_squared(transform.translation) < 1.0 {
-                                    imp.walk_destination = WalkDestination::None;
-                                    imp.load_amount = (imp.load_amount + dt).min(1.0);
-                                    cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
-                                }
-                            } else {
-                                *state = ActionState::Success;
+        if let Ok(mut imp) = imps.get_mut(*actor) {
+            if let Requested = *state {
+                cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
+            }
+            if let Requested | Executing = *state {
+                if let Some((_, boulder)) = imp.boulder.and_then(|entity| boulders.get(entity).ok())
+                {
+                    let material = Some(boulder.material.into());
+                    if boulder.marked_for_digging && (imp.load.is_none() || imp.load == material) {
+                        if imp.load_amount < 1.0 {
+                            imp.load_amount = (imp.load_amount + time.delta_seconds()).min(1.0);
+                            if imp.load.is_none() {
+                                imp.load = material;
                             }
-                        } else {
-                            *state = ActionState::Failure;
+                        }
+                        if imp.load_amount >= 1.0 {
+                            *state = Success;
                         }
                     } else {
-                        *state = ActionState::Failure;
+                        *state = Failure;
                     }
+                } else {
+                    *state = Failure;
                 }
-                ActionState::Cancelled => {
-                    if imp.load_amount < 1.0 {
-                        *state = ActionState::Failure;
-                    } else {
-                        *state = ActionState::Success;
-                    }
-                }
-                ActionState::Success | ActionState::Failure => {
-                    imp.boulder = None;
-                    imp.walk_destination = WalkDestination::None;
-                    cmds.entity(*actor).remove::<FunnyAnimation>();
-                }
+            }
+            if let Cancelled = *state {
+                *state = Failure;
+            }
+            if let Success | Failure = *state {
+                imp.boulder = None;
+                cmds.entity(*actor).remove::<FunnyAnimation>();
             }
         }
     }
@@ -745,21 +737,21 @@ fn do_find_tree(
 ) {
     use ActionState::*;
     query.for_each_mut(|(Actor(actor), mut state)| {
-        let found_tree = if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+        let found = if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
             let pos = transform.translation;
-            let tree = trees
+            let found = trees
                 .iter_mut()
                 .map(|(entity, transform)| (entity, pos.distance_squared(transform.translation)))
                 .min_by(|(_, a), (_, b)| a.float_cmp(b))
                 .map(|(e, _)| e);
 
-            imp.tree = tree;
-            imp.walk_destination = tree.into();
-            imp.tree.is_some()
+            imp.tree = found;
+            imp.walk_destination = found.into();
+            found.is_some()
         } else {
             false
         };
-        *state = if found_tree { Success } else { Failure };
+        *state = if found { Success } else { Failure };
     });
 }
 
