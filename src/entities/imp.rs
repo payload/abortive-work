@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, f32::consts::TAU, marker::PhantomData};
+use std::{cmp::Ordering, f32::consts::TAU};
 
 use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 use bevy_mod_picking::PickableBundle;
@@ -191,23 +191,22 @@ impl Plugin for ImpBrainPlugin {
 fn brain() -> ThinkerBuilder {
     Thinker::build()
         .picker(FirstToScore { threshold: 0.8 })
-        .when(WantToStoreBuilder, DoStoreBuilder)
-        //.when(WantToCutTreeBuilder, DoCutTreeBuilder)
+        .when(WantToStore, DoStore)
         .when(
-            WantToCutTreeBuilder,
-            Steps::build()
-                .step(MoveNearToBuilder)
-                .step(DoCutTreeBuilder),
+            WantToCutTree,
+            Steps::build().step(MoveNearTo).step(DoCutTree),
         )
-        .when(WantToDigBuilder, DoDigBuilder)
-        .when(WantToDropBuilder, DoDropBuilder)
-        .otherwise(DoMeanderBuilder)
+        .when(WantToDig, DoDig)
+        .when(WantToDrop, DoDrop)
+        .otherwise(DoMeander)
 }
 
 struct WantToStore;
+
 struct WantToCutTree;
 struct WantToDig;
 struct WantToDrop;
+
 struct DoStore;
 struct DoCutTree;
 struct DoDig;
@@ -215,109 +214,39 @@ struct DoDrop;
 struct DoMeander;
 struct MoveNearTo;
 
-#[derive(Debug, Clone)]
-struct WantToStoreBuilder;
-impl ScorerBuilder for WantToStoreBuilder {
-    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
-        cmd.entity(scorer).insert(WantToStore);
-    }
+macro_rules! trivial_scorer_builder {
+    ($component: ident) => {
+        impl ScorerBuilder for $component {
+            fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+                cmd.entity(scorer).insert(Self);
+            }
+        }
+    };
 }
 
-#[derive(Debug, Clone)]
-struct WantToCutTreeBuilder;
-impl ScorerBuilder for WantToCutTreeBuilder {
-    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
-        cmd.entity(scorer).insert(WantToCutTree);
-    }
+macro_rules! trivial_action_builder {
+    ($component: ident) => {
+        impl ActionBuilder for $component {
+            fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
+                cmd.entity(scorer)
+                    .insert(Self)
+                    .insert(ActionState::Requested);
+            }
+        }
+    };
 }
 
-#[derive(Debug, Clone)]
-struct WantToDigBuilder;
-impl ScorerBuilder for WantToDigBuilder {
-    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
-        cmd.entity(scorer).insert(WantToDig);
-    }
-}
+trivial_scorer_builder!(WantToStore);
+trivial_scorer_builder!(WantToCutTree);
+trivial_scorer_builder!(WantToDig);
+trivial_scorer_builder!(WantToDrop);
 
-#[derive(Debug, Clone)]
-struct WantToDropBuilder;
-impl ScorerBuilder for WantToDropBuilder {
-    fn build(&self, cmd: &mut Commands, scorer: Entity, _actor: Entity) {
-        cmd.entity(scorer).insert(WantToDrop);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DoStoreBuilder;
-impl ActionBuilder for DoStoreBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(DoStore)
-            .insert(ActionState::Requested);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DoCutTreeBuilder;
-impl ActionBuilder for DoCutTreeBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(DoCutTree)
-            .insert(ActionState::Requested);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MoveNearToBuilder;
-impl ActionBuilder for MoveNearToBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(MoveNearTo)
-            .insert(ActionState::Requested);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MyActionBuilder<T> {
-    _x: PhantomData<T>,
-}
-impl<T: 'static + Default + std::fmt::Debug + Sync + Send> ActionBuilder for MyActionBuilder<T> {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(T::default())
-            .insert(ActionState::Requested);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DoDigBuilder;
-impl ActionBuilder for DoDigBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(DoDig)
-            .insert(ActionState::Requested);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DoDropBuilder;
-impl ActionBuilder for DoDropBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(DoDrop)
-            .insert(ActionState::Requested);
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DoMeanderBuilder;
-impl ActionBuilder for DoMeanderBuilder {
-    fn build(&self, cmd: &mut Commands, action: Entity, _actor: Entity) {
-        cmd.entity(action)
-            .insert(DoMeander)
-            .insert(ActionState::Requested);
-    }
-}
+trivial_action_builder!(DoStore);
+trivial_action_builder!(DoDig);
+trivial_action_builder!(DoDrop);
+trivial_action_builder!(DoCutTree);
+trivial_action_builder!(DoMeander);
+trivial_action_builder!(MoveNearTo);
 
 ////////
 
@@ -781,7 +710,6 @@ fn do_cut_tree(
 ) {
     query.for_each_mut(|(Actor(actor), mut state)| {
         if *state == ActionState::Requested {
-            cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
             *state = ActionState::Executing;
         }
         if *state == ActionState::Cancelled {
