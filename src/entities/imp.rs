@@ -745,30 +745,30 @@ fn do_find_tree(
 ) {
     use ActionState::*;
     query.for_each_mut(|(Actor(actor), mut state)| {
-        *state = if *state == Requested {
-            if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
-                let pos = transform.translation;
-                let tree = trees
-                    .iter_mut()
-                    .map(|(entity, transform)| {
-                        (entity, pos.distance_squared(transform.translation))
-                    })
-                    .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Less))
-                    .map(|(e, _)| e);
+        let found_tree = if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
+            let pos = transform.translation;
+            let tree = trees
+                .iter_mut()
+                .map(|(entity, transform)| (entity, pos.distance_squared(transform.translation)))
+                .min_by(|(_, a), (_, b)| a.float_cmp(b))
+                .map(|(e, _)| e);
 
-                imp.tree = tree;
-                imp.walk_destination = tree.into();
-
-                if imp.tree.is_some() {
-                    Success
-                } else {
-                    Failure
-                }
-            } else {
-                Failure
-            }
+            imp.tree = tree;
+            imp.walk_destination = tree.into();
+            imp.tree.is_some()
         } else {
-            Failure
+            false
         };
+        *state = if found_tree { Success } else { Failure };
     });
+}
+
+trait FloatCmp {
+    fn float_cmp(&self, b: &Self) -> Ordering;
+}
+
+impl FloatCmp for f32 {
+    fn float_cmp(&self, b: &Self) -> Ordering {
+        self.partial_cmp(b).unwrap_or(Ordering::Less)
+    }
 }
