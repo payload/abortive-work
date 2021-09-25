@@ -739,12 +739,22 @@ fn do_find_tree(
     query.for_each_mut(|(Actor(actor), mut state)| {
         let found = if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
             let pos = transform.translation;
-            let found = trees
+            let map_distance =
+                |arg: (Entity, &Transform)| (arg.0, pos.distance_squared(arg.1.translation));
+            let near: Vec<_> = trees
                 .iter_mut()
-                .map(|(entity, transform)| (entity, pos.distance_squared(transform.translation)))
-                .min_by(|(_, a), (_, b)| a.float_cmp(b))
-                .map(|(e, _)| e);
-
+                .map(map_distance)
+                .filter(|x| x.1 < 10.0)
+                .collect();
+            let found = if near.is_empty() {
+                trees
+                    .iter_mut()
+                    .map(map_distance)
+                    .min_by(|(_, a), (_, b)| a.float_cmp(b))
+            } else {
+                near.get(fastrand::usize(..near.len())).cloned()
+            };
+            let found = found.map(|(e, _)| e);
             imp.tree = found;
             imp.walk_destination = found.into();
             found.is_some()
