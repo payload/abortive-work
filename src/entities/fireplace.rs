@@ -3,12 +3,15 @@ use bevy::{
     prelude::*,
 };
 
-use crate::systems::{disk, Destructable};
+use crate::systems::{cone, disk, Destructable, FocusObject};
 
-use super::{MageInteractable, NotGround};
+use super::NotGround;
 
 #[derive(Default)]
-pub struct Fireplace {}
+pub struct Fireplace {
+    pub lit: bool,
+    flame_model: Option<Entity>,
+}
 
 impl Fireplace {
     pub fn new() -> Self {
@@ -20,7 +23,8 @@ pub struct FireplacePlugin;
 
 impl Plugin for FireplacePlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
+            .add_system(update);
     }
 }
 
@@ -51,8 +55,8 @@ impl<'w, 's> FireplaceSpawn<'w, 's> {
             fireplace,
             transform,
             GlobalTransform::identity(),
-            MageInteractable::default(),
             Destructable,
+            FocusObject,
         ));
         entity_cmds.push_children(&[model]);
         entity_cmds
@@ -64,6 +68,8 @@ pub struct FireplaceAssets {
     pub transform: Transform,
     pub material: Handle<StandardMaterial>,
     pub mesh: Handle<Mesh>,
+    flame_material: Handle<StandardMaterial>,
+    flame_mesh: Handle<Mesh>,
 }
 
 fn load_assets(
@@ -81,5 +87,48 @@ fn load_assets(
             ..Default::default()
         }),
         mesh: meshes.add(disk(0.3, 24)),
+
+        flame_material: materials.add(StandardMaterial {
+            base_color: Color::ORANGE,
+            metallic: 0.0,
+            roughness: 0.0,
+            reflectance: 0.0,
+            ..Default::default()
+        }),
+        flame_mesh: meshes.add(cone(0.15, 0.35, 24)),
     });
+}
+
+struct Flame;
+
+fn update(
+    mut fireplaces: Query<(Entity, &mut Fireplace), Changed<Fireplace>>,
+    flames: Query<Entity, With<Flame>>,
+    mut cmds: Commands,
+    assets: Res<FireplaceAssets>,
+) {
+    for (entity, mut fireplace) in fireplaces.iter_mut() {
+        if fireplace.lit {
+            if fireplace
+                .flame_model
+                .and_then(|e| flames.get(e).ok())
+                .is_none()
+            {
+                let flame_model = cmds
+                    .spawn_bundle(PbrBundle {
+                        material: assets.flame_material.clone(),
+                        mesh: assets.flame_mesh.clone(),
+                        ..Default::default()
+                    })
+                    .insert(Flame)
+                    .id();
+                cmds.entity(entity).push_children(&[flame_model]);
+                fireplace.flame_model = Some(flame_model);
+            }
+        } else {
+            if let Some(e) = fireplace.flame_model.and_then(|e| flames.get(e).ok()) {
+                cmds.entity(e).despawn_recursive();
+            }
+        }
+    }
 }

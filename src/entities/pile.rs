@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{cone, Destructable, FocusObject, Thing};
 
-use super::{tree, BoulderAssets, MageInteractable, NotGround};
+use super::{tree, BoulderAssets, NotGround};
 
 pub struct Pile {
     pub load: Thing,
@@ -58,7 +58,6 @@ impl<'w, 's> PileSpawn<'w, 's> {
             pile,
             transform,
             GlobalTransform::identity(),
-            MageInteractable::default(),
             Destructable,
             FocusObject,
         ));

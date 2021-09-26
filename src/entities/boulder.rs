@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::systems::{Destructable, FocusObject};
 
-use super::{Blocking, MageInteractable, NotGround};
+use super::{Blocking, NotGround};
 
 #[derive(Clone)]
 pub struct Boulder {
@@ -101,7 +101,6 @@ impl<'w, 's> BoulderSpawn<'w, 's> {
                 boulder,
                 transform,
                 GlobalTransform::identity(),
-                MageInteractable::default(),
                 Destructable,
                 FocusObject,
             ))

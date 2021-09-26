@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::systems::{Focus, Stack, Thing};
 
-use super::{Boulder, ConveyorBelt, NotGround, Pile, StoreIntoPile};
+use super::{NotGround, StoreIntoPile};
 
 #[derive(Default)]
 pub struct Mage {
@@ -67,8 +67,7 @@ pub struct MagePlugin;
 
 impl Plugin for MagePlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system(update);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets);
     }
 }
 
@@ -136,45 +135,6 @@ fn load_assets(
             .into(),
         ),
     });
-}
-
-#[derive(Default)]
-pub struct MageInteractable {
-    pub near: bool,
-}
-
-fn update(
-    mut mages: Query<(&mut Mage, &Focus)>,
-    mut boulder: Query<&mut Boulder>,
-    mut pile: Query<&mut Pile>,
-    mut conveyor: Query<&mut ConveyorBelt>,
-) {
-    for (mut mage, focus) in mages.iter_mut() {
-        if mage.interact_with_focus {
-            mage.interact_with_focus = false;
-
-            if let Some(entity) = focus.entity {
-                if let Ok(mut boulder) = boulder.get_mut(entity) {
-                    boulder.marked_for_digging = !boulder.marked_for_digging;
-                }
-
-                if let Ok(mut pile) = pile.get_mut(entity) {
-                    if pile.amount >= 1.0 {
-                        pile.amount -= 1.0;
-                        mage.put_into_inventory(pile.load, 1.0);
-                    }
-                }
-
-                if let Ok(mut conveyor) = conveyor.get_mut(entity) {
-                    if let Some(thing) = mage.take_first(1.0) {
-                        conveyor.store(thing, 1.0);
-                    } else {
-                        conveyor.marked_for_thing = None;
-                    }
-                }
-            }
-        }
-    }
 }
 
 impl Mage {
