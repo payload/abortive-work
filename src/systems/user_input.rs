@@ -528,47 +528,6 @@ impl<'w, 's> Details<'w, 's> {
             .and_then(|focus| focus.screen_pos)
     }
 
-    fn focus_details(&self, ui: &mut egui::Ui) {
-        ui.label(
-            if let Some(entity) = self.focus.get_single().ok().and_then(|focus| focus.entity) {
-                if let Ok(conveyor) = self.belt.get(entity) {
-                    let mage = self.mage.single();
-                    format!(
-                        "Conveyor for {:?}. {}",
-                        conveyor.marked_for_thing,
-                        match (conveyor.marked_for_thing, mage.peek_first()) {
-                            (Some(_), None) => "(E) unmark".into(),
-                            (_, Some(thing)) => format!("(E) mark with {:?}", thing),
-                            _ => String::new(),
-                        }
-                    )
-                } else if let Ok(boulder) = self.boulder.get(entity) {
-                    format!(
-                        "Boulder of {:?}. (E) {}",
-                        boulder.material,
-                        match boulder.marked_for_digging {
-                            true => "stop dig",
-                            false => "let dig",
-                        }
-                    )
-                } else if let Ok(pile) = self.pile.get(entity) {
-                    format!("Pile of {:.1} {:?}. (E) take one", pile.amount, pile.load)
-                } else if let Ok(site) = self.ritual_site.get(entity) {
-                    let needs: String = site
-                        .needs
-                        .iter()
-                        .map(|need| format!("{}/{} {:?} ", need.available, need.needed, need.what))
-                        .collect();
-                    format!("Ritual site with following thing requested:\n{}", needs)
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            },
-        );
-    }
-
     fn interaction_hint(&self, ui: &mut egui::Ui) {
         if let Some(entity) = self.focus.get_single().ok().and_then(|focus| focus.entity) {
             if let Ok(boulder) = self.boulder.get(entity) {
@@ -616,6 +575,16 @@ impl<'w, 's> Details<'w, 's> {
                     ui.label("Ⓔ light a fire");
                 }
             }
+
+            if let Ok(site) = self.ritual_site.get(entity) {
+                let needs: String = site
+                    .needs
+                    .iter()
+                    .map(|need| format!("{}/{} {:?} ", need.available, need.needed, need.what))
+                    .collect();
+                ui.label("Ritual site");
+                ui.label(format!("{}", needs));
+            }
         }
     }
 
@@ -643,9 +612,6 @@ impl<'w, 's> Details<'w, 's> {
         } else {
             String::new()
         });
-
-        ui.heading("Focus");
-        self.focus_details(ui);
     }
 }
 
