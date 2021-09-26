@@ -73,13 +73,16 @@ fn spawn_level_1(
 
     for y in 0..h {
         for x in 0..w {
-            let v = map.get_value(x, y);
+            let v = map.get_value(x, y).abs();
             let x = x as f32;
             let z = y as f32;
             let transform = Transform::from_xyz(x + hx, 0.0, z + hz);
 
             if v < 0.1 {
-                if fastrand::f32() < 0.1 {
+                if fastrand::f32() < 0.3 {
+                    trees.spawn(tree::Tree::new(), transform);
+                }
+                if fastrand::f32() < 0.3 {
                     trees.spawn(tree::Tree::new(), transform);
                 }
             } else if v > 0.3 && 0.4 > v {

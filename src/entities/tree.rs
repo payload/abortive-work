@@ -52,12 +52,8 @@ pub struct Spawn<'w, 's> {
 
 impl<'w, 's> Spawn<'w, 's> {
     pub fn spawn(&mut self, tree: Tree, transform: Transform) {
-        let random_offset = self.res.model_offset
-            + Vec3::new(
-                0.1 - 0.2 * fastrand::f32(),
-                0.0,
-                0.1 - 0.2 * fastrand::f32(),
-            );
+        let random_offset =
+            self.res.model_offset + Vec3::new(0.5 - fastrand::f32(), 0.0, 0.5 - fastrand::f32());
         let random_angle1 = 0.1 - 0.2 * fastrand::f32();
         let random_angle2 = 0.1 - 0.2 * fastrand::f32();
         let random_rotation =
