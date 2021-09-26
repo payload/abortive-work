@@ -127,7 +127,11 @@ fn load_assets(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     cmds.insert_resource(ImpAssets {
-        transform: Transform::from_xyz(0.0, 0.3, 0.0),
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.25, 0.0),
+            rotation: Quat::from_rotation_x(0.3),
+            scale: Vec3::ONE,
+        },
         material: materials.add(material(Color::SALMON)),
         mesh: meshes.add(shape::Box::new(0.4, 0.6, 0.4).into()),
     });
@@ -166,6 +170,9 @@ fn update_walk(
         let speed = 3.0;
         let step = vec * speed * dt;
         transform.translation += step;
+        transform.rotation = transform
+            .rotation
+            .lerp(Quat::from_rotation_y(vec.x.atan2(vec.z)), 10.0 * dt);
     }
 }
 
