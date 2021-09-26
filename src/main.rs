@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 mod entities;
 use bevy_prototype_debug_lines::DebugLinesPlugin;
+use entities::tree::Tree;
 use entities::*;
 
 mod systems;
@@ -27,6 +28,7 @@ fn main() {
         .add_plugin(SystemsPlugin)
         .add_plugin(DebugLinesPlugin)
         .add_startup_system(spawn_level_1)
+        .add_startup_system_to_stage(StartupStage::PostStartup, remove_trees_from_buildings)
         .run();
 
     // a portal which produces imps next to it
@@ -155,4 +157,18 @@ fn spawn_level_1(
         )
         .id();
     conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3)], Some(dump1));
+}
+
+fn remove_trees_from_buildings(
+    trees: Query<(Entity, &Transform), With<Tree>>,
+    others: Query<&Transform, (With<Destructable>, Without<Tree>)>,
+    mut cmds: Commands,
+) {
+    for (a_tree, t_tree) in trees.iter() {
+        for t_other in others.iter() {
+            if t_tree.translation.distance_squared(t_other.translation) < 1.0 {
+                cmds.entity(a_tree).despawn_recursive();
+            }
+        }
+    }
 }
