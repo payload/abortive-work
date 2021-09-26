@@ -31,7 +31,6 @@ impl Plugin for UserInputPlugin {
             .add_system(example_ui)
             .add_system(click_imp)
             .add_system(click_smithery)
-            .add_system_to_stage(CoreStage::PostUpdate, update_mage_focus)
             .add_system(update_pedestals)
             .add_system(player_movement)
             .add_system(update_player)
@@ -650,26 +649,6 @@ impl<'w, 's> Details<'w, 's> {
     }
 }
 
-fn update_mage_focus(
-    query: Query<&Focus, (With<Mage>, Changed<Focus>)>,
-    entities: Query<Entity>,
-    mut augment: AugmentSpawn,
-) {
-    for focus in query.iter() {
-        if let Some(entity) = focus.entity {
-            if entities.get(entity).is_ok() {
-                augment.add_coin(entity);
-            }
-        }
-
-        if let Some(entity) = focus.before {
-            if entities.get(entity).is_ok() {
-                augment.remove_coin(entity);
-            }
-        }
-    }
-}
-
 fn update_pedestals(
     boulders: Query<(Entity, &Boulder), Changed<Boulder>>,
     added_trees: Query<Entity, Added<MarkCutTree>>,
@@ -703,33 +682,3 @@ fn camera_zoom_with_mousewheel(
         tracking.single_mut().offset.y += y;
     }
 }
-
-/*
-font: asset_server.load("NanumBrushScript-Regular.ttf"),
-
-let text_style = TextStyle {
-            font: self.assets.font.clone(),
-            font_size: 96.0,
-            color: Color::WHITE,
-        };
-        let text_alignment = TextAlignment::default();
-
-        let hint = self
-            .cmds
-            .spawn_bundle(Text2dBundle {
-                transform: Transform {
-                    translation: Vec3::new(0.0, 3.0, 0.0),
-                    rotation: Quat::IDENTITY,
-                    scale: Vec3::new(-1.0, 1.0, 1.0) / text_style.font_size / 2.0,
-                },
-                // ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁ ⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏ
-                text: Text::with_section(
-                    "Ⓤ let dig\tⓄ scream\nⒺ dig    \tⓌ not scream",
-                    text_style.clone(),
-                    text_alignment,
-                ),
-                ..Default::default()
-            })
-            .insert(LookAtCamera)
-            .id();
-             */
