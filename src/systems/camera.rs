@@ -7,7 +7,8 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(camera_tracking).add_system(look_at_camera);
+        app.add_system_to_stage(CoreStage::PostUpdate, camera_tracking)
+            .add_system(look_at_camera);
     }
 }
 
@@ -20,17 +21,14 @@ fn camera_tracking(
 
     for (tracking_transform, tracking) in tracking.get_single() {
         for mut camera_transform in camera.get_single_mut() {
-            let diff =
-                tracking_transform.translation + tracking.offset - camera_transform.translation;
-            let len = diff.length();
-            let dir = diff.normalize_or_zero();
-            let step = if len < 1.0 {
-                diff * dt
-            } else {
-                dir * len * len * dt
-            };
-            *camera_transform = Transform::from_translation(camera_transform.translation + step)
-                .looking_at(tracking_transform.translation, Vec3::Y);
+            let target = tracking_transform.translation + tracking.offset;
+            camera_transform.translation = camera_transform
+                .translation
+                .lerp(target, (dt * 3.0).min(1.0));
+            let target_rot = camera_transform
+                .looking_at(tracking_transform.translation, Vec3::Y)
+                .rotation;
+            camera_transform.rotation = camera_transform.rotation.lerp(target_rot, dt.min(1.0));
         }
     }
 }

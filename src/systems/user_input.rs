@@ -293,7 +293,10 @@ fn player_movement(
     if let Ok(mut transform) = query.get_single_mut() {
         if control != Vec3::ZERO {
             transform.translation += control.normalize_or_zero() * speed * dt;
-            transform.rotation = Quat::from_rotation_y(control.x.atan2(control.z));
+            transform.rotation = transform.rotation.lerp(
+                Quat::from_rotation_y(control.x.atan2(control.z)),
+                (10.0 * dt).min(1.0),
+            );
         }
     }
 }
