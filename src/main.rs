@@ -1,3 +1,5 @@
+use std::f32::consts::TAU;
+
 use bevy::prelude::*;
 
 mod entities;
@@ -11,7 +13,7 @@ use noice::{
 };
 use systems::*;
 
-use crate::entities::ritual_site::RitualSite;
+use crate::entities::{dump::Dump, ritual_site::RitualSite};
 
 fn main() {
     App::new()
@@ -57,6 +59,7 @@ fn spawn_level_1(
     mut conveyor: ConveyorSpawn,
     mut trees: tree::Spawn,
     mut ritual_sites: ritual_site::Spawn,
+    mut dump: dump::Spawn,
 ) {
     use BoulderMaterial::*;
 
@@ -71,6 +74,9 @@ fn spawn_level_1(
     let hx = -0.5 * w as f32;
     let hz = -0.5 * h as f32;
 
+    let mut trees_n = 0;
+    let mut boulders_n = 0;
+
     for y in 0..h {
         for x in 0..w {
             let v = map.get_value(x, y).abs();
@@ -81,29 +87,40 @@ fn spawn_level_1(
             if v < 0.1 {
                 if fastrand::f32() < 0.3 {
                     trees.spawn(tree::Tree::new(), transform);
+                    trees_n += 1;
                 }
                 if fastrand::f32() < 0.3 {
                     trees.spawn(tree::Tree::new(), transform);
+                    trees_n += 1;
                 }
             } else if v > 0.3 && 0.4 > v {
                 if fastrand::f32() < 0.8 {
                     boulder.spawn(Boulder::new(Stone), transform);
+                    boulders_n += 1;
                 } else {
                     boulder.spawn(Boulder::new(Coal), transform);
+                    boulders_n += 1;
                 }
             } else if v > 0.4 && 0.45 > v {
                 boulder.spawn(Boulder::new(Coal), transform);
+                boulders_n += 1;
             } else if v > 0.45 && 0.47 > v {
                 boulder.spawn(Boulder::new(Stone), transform);
+                boulders_n += 1;
             } else if v > 0.47 && 0.49 > v {
                 boulder.spawn(Boulder::new(Iron), transform);
+                boulders_n += 1;
             } else if v > 0.48 && 0.53 > v && fastrand::f32() < 0.05 {
                 boulder.spawn(Boulder::new(Gold), transform);
+                boulders_n += 1;
             } else if v > 0.47 && 1.0 > v {
                 boulder.spawn(Boulder::new(Stone), transform);
+                boulders_n += 1;
             }
         }
     }
+
+    println!("{} trees, {} boulders.", trees_n, boulders_n);
 
     let center = Vec3::new(7.0, 0.0, 6.0);
     let pos = |x: i32, z: i32| Vec3::new(center.x + x as f32, 0.0, center.z + z as f32);
@@ -127,5 +144,15 @@ fn spawn_level_1(
         at(-7, -3),
     );
 
-    conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3), pos(-3, -13)], None);
+    let dump1 = dump
+        .spawn(
+            Dump::new(),
+            Transform {
+                rotation: Quat::from_rotation_y(-0.28 * TAU),
+                translation: center + Vec3::new(-3.5, 0.0, -3.0),
+                ..Default::default()
+            },
+        )
+        .id();
+    conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3)], Some(dump1));
 }

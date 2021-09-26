@@ -30,6 +30,7 @@ pub use pile::*;
 mod conveyor;
 pub use conveyor::*;
 
+pub mod dump;
 pub mod ritual_site;
 pub mod tree;
 
@@ -50,6 +51,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(ConveyorPlugin)
             .add_plugin(tree::Plugin)
             .add_plugin(ritual_site::Plugin)
-            .add_plugin(GroundPlugin);
+            .add_plugin(GroundPlugin)
+            .add_plugin(dump::Plugin);
     }
 }

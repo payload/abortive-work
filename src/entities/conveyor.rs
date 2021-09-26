@@ -59,6 +59,17 @@ impl ConveyorBelt {
             );
         }
     }
+
+    pub fn drain_items_after_pos(&mut self, min_pos: i32) {
+        if let Some((index, _)) = self
+            .items
+            .iter()
+            .enumerate()
+            .find(|(_, item)| item.pos >= min_pos)
+        {
+            self.items.drain(index..);
+        }
+    }
 }
 
 pub struct ConveyorPlugin;
@@ -159,7 +170,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
             .collect();
 
         self.cmds.spawn().insert(ConveyorChain {
-            belts: defs.iter().map(|p| p.0).collect(),
+            belts: defs.iter().map(|p| p.0).chain(output.into_iter()).collect(),
         });
 
         debug_belt_defs(
