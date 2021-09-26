@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::system::SystemParam,
+    ecs::{entity::EntityMap, system::SystemParam},
     input::{keyboard::KeyboardInput, mouse::MouseWheel, system::exit_on_esc_system, ElementState},
     prelude::*,
 };
@@ -7,8 +7,8 @@ use bevy_egui::egui::{self, FontDefinitions, FontFamily};
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
-use crate::entities::ritual_site::RitualSite;
 use crate::entities::*;
+use crate::entities::{ritual_site::RitualSite, tree::Tree};
 use crate::{entities::tree::MarkCutTree, systems::Stack};
 
 use super::{
@@ -35,6 +35,7 @@ impl Plugin for UserInputPlugin {
             .add_system(player_movement)
             .add_system(update_player)
             .add_system(camera_zoom_with_mousewheel)
+            .add_system(update_tree_rings)
             .insert_resource(UiState::default())
             .init_resource::<DebugConfig>();
     }
@@ -519,7 +520,7 @@ pub struct Details<'w, 's> {
     boulder: Query<'w, 's, &'static Boulder>,
     pile: Query<'w, 's, &'static Pile>,
     fireplace: Query<'w, 's, &'static Fireplace>,
-    tree: Query<'w, 's, &'static tree::Component>,
+    tree: Query<'w, 's, &'static tree::Tree>,
     ritual_site: Query<'w, 's, &'static RitualSite>,
 }
 
@@ -620,20 +621,31 @@ impl<'w, 's> Details<'w, 's> {
 
 fn update_pedestals(
     boulders: Query<(Entity, &Boulder), Changed<Boulder>>,
-    added_trees: Query<Entity, Added<MarkCutTree>>,
-    removed_trees: RemovedComponents<MarkCutTree>,
     mut augment: AugmentSpawn,
 ) {
     for (boulder_entity, boulder) in boulders.iter() {
         augment.with_pedestal(boulder_entity, boulder.marked_for_digging);
     }
+}
 
-    for entity in added_trees.iter() {
-        augment.with_pedestal(entity, true);
+fn update_tree_rings(
+    added_trees: Query<(Entity, &Tree, &Transform), Added<MarkCutTree>>,
+    removed_trees: RemovedComponents<MarkCutTree>,
+    mut tree_ring_map: Local<EntityMap>,
+    mut augment: AugmentSpawn,
+    mut cmds: Commands,
+) {
+    for (a_tree, tree, t_tree) in added_trees.iter() {
+        let pos = Vec3::new(t_tree.translation.x, 0.02, t_tree.translation.z);
+        let a_ring = augment.spawn_disk(pos, tree.tree_radius).id();
+        tree_ring_map.insert(a_tree, a_ring);
     }
 
-    for entity in removed_trees.iter() {
-        augment.with_pedestal(entity, false);
+    for a_tree in removed_trees.iter() {
+        if let Ok(a_ring) = tree_ring_map.get(a_tree) {
+            tree_ring_map.remove(a_tree);
+            cmds.entity(a_ring).despawn_recursive();
+        }
     }
 }
 

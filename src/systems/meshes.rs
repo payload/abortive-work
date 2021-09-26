@@ -78,3 +78,52 @@ pub fn cone(radius: f32, height: f32, segments: u16) -> Mesh {
     mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh
 }
+
+pub fn ring(outer_radius: f32, inner_radius: f32, segments: u16) -> Mesh {
+    let mut indices = Vec::<u16>::new();
+    let mut positions = Vec::new();
+    let mut normals = Vec::new();
+    let mut uvs = Vec::new();
+    let segments_f = segments as f32;
+
+    for i in 0..segments {
+        let i2 = (i + 1) % segments;
+        let ia = i as f32;
+        let ib = i2 as f32;
+        let a = -(ia / segments_f) * TAU;
+        let b = -(ib / segments_f) * TAU;
+        let [ax, az, bx, bz] = [a.cos(), a.sin(), b.cos(), b.sin()];
+        let u = (ax + 1.0) * 0.5;
+        let v = (az + 1.0) * 0.5;
+
+        // NOTE could produce less vertices here if needed
+        positions.push([ax * outer_radius, 0.0, az * outer_radius]);
+        normals.push([0.0, 1.0, 0.0]);
+        uvs.push([u, v]);
+
+        positions.push([bx * outer_radius, 0.0, bz * outer_radius]);
+        normals.push([0.0, 1.0, 0.0]);
+        uvs.push([u, v]);
+
+        positions.push([ax * inner_radius, 0.0, az * inner_radius]);
+        normals.push([0.0, 1.0, 0.0]);
+        uvs.push([u, v]);
+
+        let j = i * 3;
+        indices.push(j);
+        indices.push(j + 1);
+        indices.push(j + 2);
+
+        let j2 = i2 * 3;
+        indices.push(j + 1);
+        indices.push(j2 + 2);
+        indices.push(j + 2);
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    mesh.set_indices(Some(Indices::U16(indices)));
+    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh
+}

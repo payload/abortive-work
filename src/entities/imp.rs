@@ -637,7 +637,7 @@ fn debug_lines(
 
 fn want_to_cut_tree(
     imps: Query<&Imp>,
-    trees: Query<&tree::Component, With<MarkCutTree>>,
+    trees: Query<&tree::Tree, With<MarkCutTree>>,
     mut query: Query<(&Actor, &mut Score), With<WantToCutTree>>,
 ) {
     let trees_count = trees.iter().count();
@@ -698,7 +698,7 @@ fn do_move_near_to(
 
 fn do_cut_tree(
     mut imps: Query<&mut Imp>,
-    mut trees: Query<&mut tree::Component, With<MarkCutTree>>,
+    mut trees: Query<&mut tree::Tree, With<MarkCutTree>>,
     mut query: Query<(&Actor, &mut ActionState), With<DoCutTree>>,
     time: Res<Time>,
     mut cmds: Commands,

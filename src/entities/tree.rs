@@ -4,9 +4,10 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use super::{Blocking, NotGround};
 
 #[derive(Default)]
-pub struct Component {
+pub struct Tree {
     pub mass: f32,
     pub mark_cut_tree: bool,
+    pub tree_radius: f32,
 }
 
 pub struct Model;
@@ -22,10 +23,11 @@ impl bevy::prelude::Plugin for Plugin {
     }
 }
 
-impl Component {
+impl Tree {
     pub fn new() -> Self {
         Self {
             mass: 2.0,
+            tree_radius: 0.2 - 0.12 * fastrand::f32(),
             ..Self::default()
         }
     }
@@ -49,7 +51,7 @@ pub struct Spawn<'w, 's> {
 }
 
 impl<'w, 's> Spawn<'w, 's> {
-    pub fn spawn(&mut self, component: Component, transform: Transform) {
+    pub fn spawn(&mut self, tree: Tree, transform: Transform) {
         let random_offset = self.res.model_offset
             + Vec3::new(
                 0.1 - 0.2 * fastrand::f32(),
@@ -61,16 +63,16 @@ impl<'w, 's> Spawn<'w, 's> {
         let random_rotation =
             Quat::from_rotation_z(random_angle1).mul_quat(Quat::from_rotation_x(random_angle2));
         let random_scale = Vec3::new(
-            1.0 - 0.2 * fastrand::f32(),
+            tree.tree_radius / 0.2,
             1.0 - 0.1 * fastrand::f32(),
-            1.0 - 0.2 * fastrand::f32(),
+            tree.tree_radius / 0.2,
         );
 
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
                 transform: Transform {
-                    translation: random_offset,
+                    translation: Vec3::ZERO,
                     rotation: random_rotation,
                     scale: random_scale,
                 },
@@ -85,8 +87,11 @@ impl<'w, 's> Spawn<'w, 's> {
 
         self.cmds
             .spawn_bundle((
-                component,
-                transform,
+                tree,
+                Transform {
+                    translation: transform.translation + random_offset,
+                    ..transform
+                },
                 GlobalTransform::identity(),
                 Destructable,
                 FocusObject::new(),
@@ -118,7 +123,7 @@ fn init_resource(
         }),
         mesh: meshes.add(
             shape::Capsule {
-                radius: 0.1,
+                radius: 0.2,
                 ..Default::default()
             }
             .into(),
@@ -127,7 +132,7 @@ fn init_resource(
 }
 
 fn update_trees(
-    trees: Query<(Entity, &Component, Option<&MarkCutTree>), Changed<Component>>,
+    trees: Query<(Entity, &Tree, Option<&MarkCutTree>), Changed<Tree>>,
     mut cmds: Commands,
 ) {
     for (entity, tree, mark) in trees.iter() {

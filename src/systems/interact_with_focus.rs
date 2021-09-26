@@ -25,7 +25,7 @@ fn update(
 pub struct InteractWithFocus<'w, 's> {
     focus: Query<'w, 's, &'static Focus>,
     mage: Query<'w, 's, &'static mut Mage>,
-    trees: Query<'w, 's, &'static mut tree::Component>,
+    trees: Query<'w, 's, &'static mut tree::Tree>,
     boulders: Query<'w, 's, &'static mut Boulder>,
     belts: Query<'w, 's, &'static mut ConveyorBelt>,
     piles: Query<'w, 's, &'static mut Pile>,

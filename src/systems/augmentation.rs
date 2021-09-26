@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use super::disk;
+use super::{disk, ring};
 
 pub struct AugmentationPlugin;
 
@@ -20,6 +20,7 @@ pub struct AugmentSpawn<'w, 's> {
     assets: Res<'w, AugmentAssets>,
     with_pedestal: Query<'w, 's, &'static WithPedestal>,
     transform: Query<'w, 's, &'static Transform>,
+    meshes: ResMut<'w, Assets<Mesh>>,
 }
 
 impl<'w, 's> AugmentSpawn<'w, 's> {
@@ -68,6 +69,27 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
         ));
         entity_cmds.push_children(&[model]);
         entity_cmds
+    }
+
+    #[allow(unused)]
+    pub fn spawn_ring<'a>(&'a mut self, pos: Vec3, radius: f32) -> EntityCommands<'w, 's, 'a> {
+        let e_cmds = self.cmds.spawn_bundle(PbrBundle {
+            transform: Transform::from_translation(pos),
+            material: self.assets.pedestal_material.clone(),
+            mesh: self.meshes.add(ring(radius + 0.1, radius, 24)),
+            ..Default::default()
+        });
+        e_cmds
+    }
+
+    pub fn spawn_disk<'a>(&'a mut self, pos: Vec3, radius: f32) -> EntityCommands<'w, 's, 'a> {
+        let e_cmds = self.cmds.spawn_bundle(PbrBundle {
+            transform: Transform::from_translation(pos),
+            material: self.assets.pedestal_material.clone(),
+            mesh: self.meshes.add(disk(radius + 0.1, 24)),
+            ..Default::default()
+        });
+        e_cmds
     }
 }
 
