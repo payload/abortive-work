@@ -573,30 +573,29 @@ fn do_meander(
     mut imps: Query<(&mut Imp, &Transform)>,
     mut query: Query<(&Actor, &mut ActionState), With<DoMeander>>,
 ) {
+    use ActionState::*;
     for (Actor(actor), mut state) in query.iter_mut() {
         if let Ok((mut imp, transform)) = imps.get_mut(*actor) {
             let pos = transform.translation;
 
-            match *state {
-                ActionState::Init => {}
-                ActionState::Requested => {
+            if let Init | Requested = *state {
+                if fastrand::f32() < 0.9 {
+                    imp.walk_destination = WalkDestination::None;
+                } else {
                     imp.walk_destination = WalkDestination::Vec3(pos + 2.0 * random_vec());
-                    *state = ActionState::Executing;
+                    *state = Executing;
                 }
-                ActionState::Executing => {
-                    if let WalkDestination::Vec3(dest) = imp.walk_destination {
-                        if pos.distance_squared(dest) < 0.1 {
-                            *state = ActionState::Success;
-                        }
+            }
+            if let Executing = *state {
+                if let WalkDestination::Vec3(dest) = imp.walk_destination {
+                    if pos.distance_squared(dest) < 0.1 {
+                        *state = Success;
                     }
                 }
-                ActionState::Cancelled => {
-                    *state = ActionState::Success;
-                }
-                ActionState::Success => {
-                    imp.walk_destination = WalkDestination::None;
-                }
-                ActionState::Failure => {}
+            }
+            if let Cancelled | Success | Failure = *state {
+                imp.walk_destination = WalkDestination::None;
+                *state = Success;
             }
         }
     }
