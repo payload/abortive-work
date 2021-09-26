@@ -22,10 +22,15 @@ fn camera_tracking(
         for mut camera_transform in camera.get_single_mut() {
             let diff =
                 tracking_transform.translation + tracking.offset - camera_transform.translation;
-            let step = diff.normalize_or_zero() * diff.length_squared();
-            *camera_transform =
-                Transform::from_translation(camera_transform.translation + step * dt)
-                    .looking_at(tracking_transform.translation, Vec3::Y);
+            let len = diff.length();
+            let dir = diff.normalize_or_zero();
+            let step = if len < 1.0 {
+                diff * dt
+            } else {
+                dir * len * len * dt
+            };
+            *camera_transform = Transform::from_translation(camera_transform.translation + step)
+                .looking_at(tracking_transform.translation, Vec3::Y);
         }
     }
 }
