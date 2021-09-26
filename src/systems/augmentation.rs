@@ -83,13 +83,14 @@ impl<'w, 's> AugmentSpawn<'w, 's> {
                 mesh: self.assets.coin_mesh.clone(),
                 ..Default::default()
             })
+            .insert(CoinAnimation)
             .id();
 
         let mut entity_cmds = self.cmds.spawn_bundle((
             Transform::from_xyz(0.0, 2.0, 0.0),
             GlobalTransform::identity(),
         ));
-        entity_cmds.push_children(&[model]).insert(CoinAnimation);
+        entity_cmds.push_children(&[model]);
         entity_cmds
     }
 
@@ -160,7 +161,7 @@ fn coin_animation(mut query: Query<&mut Transform, With<CoinAnimation>>, time: R
     let angle = TAU * dt;
 
     for mut transform in query.iter_mut() {
-        transform.rotate(Quat::from_rotation_y(angle));
+        transform.rotate(Quat::from_rotation_z(angle));
     }
 }
 

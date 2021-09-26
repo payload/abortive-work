@@ -3,7 +3,7 @@ use bevy::{
     input::{keyboard::KeyboardInput, mouse::MouseWheel, system::exit_on_esc_system, ElementState},
     prelude::*,
 };
-use bevy_egui::egui;
+use bevy_egui::egui::{self, FontDefinitions, FontFamily};
 use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
@@ -420,6 +420,22 @@ fn example_ui(
     boulder_config: ResMut<BoulderConfig>,
     mut debug_config: ResMut<DebugConfig>,
 ) {
+    let mut fonts = FontDefinitions::default();
+    fonts.font_data.insert(
+        "Nanum".to_owned(),
+        std::borrow::Cow::Borrowed(include_bytes!("../../assets/NanumBrushScript-Regular.ttf")),
+    );
+    fonts.fonts_for_family.insert(
+        FontFamily::Proportional,
+        vec![
+            "Ubuntu-Light".to_owned(),
+            "NotoEmoji-Regular".to_owned(),
+            "emoji-icon-font".to_owned(),
+            "Nanum".to_owned(),
+        ],
+    );
+    egui_ctx.ctx().set_fonts(fonts);
+
     egui::Window::new("abortive work")
         .default_pos((0.0, 0.0))
         .show(egui_ctx.ctx(), |ui| {
@@ -465,6 +481,18 @@ fn example_ui(
             ui.add_space(8.0);
             boulder_config_ui(ui, boulder_config);
         });
+
+    if let Some(pos) = details.focus_screen_pos() {
+        let height = egui_ctx.ctx().available_rect().height();
+        let pos = (pos.x, height - pos.y);
+
+        egui::Area::new("interaction_hint")
+            .fixed_pos(pos)
+            .show(egui_ctx.ctx(), |ui| {
+                details.interaction_hint(ui);
+            });
+    } else {
+    }
 }
 
 fn boulder_config_ui(ui: &mut egui::Ui, mut boulder_config: ResMut<BoulderConfig>) {
@@ -485,42 +513,26 @@ fn boulder_config_ui(ui: &mut egui::Ui, mut boulder_config: ResMut<BoulderConfig
 pub struct Details<'w, 's> {
     mage: Query<'w, 's, &'static Mage>,
     focus: Query<'w, 's, &'static Focus>,
-    conveyor: Query<'w, 's, &'static ConveyorBelt>,
+    belt: Query<'w, 's, &'static ConveyorBelt>,
     boulder: Query<'w, 's, &'static Boulder>,
     pile: Query<'w, 's, &'static Pile>,
+    fireplace: Query<'w, 's, &'static Fireplace>,
+    tree: Query<'w, 's, &'static tree::Component>,
     ritual_site: Query<'w, 's, &'static RitualSite>,
 }
 
 impl<'w, 's> Details<'w, 's> {
-    fn add_to_ui(&self, ui: &mut egui::Ui) {
-        let display_stack_thing = |s: &Stack| s.thing.map(|t| format!(" {:.1} {:?}", s.amount, t));
+    fn focus_screen_pos(&self) -> Option<Vec2> {
+        self.focus
+            .get_single()
+            .ok()
+            .and_then(|focus| focus.screen_pos)
+    }
 
-        ui.heading("Mage");
-        ui.label(
-            self.mage
-                .get_single()
-                .map(|mage| {
-                    std::iter::once("Carries".to_string())
-                        .chain(mage.inventory.iter().filter_map(display_stack_thing))
-                        .collect::<String>()
-                })
-                .unwrap_or_default(),
-        );
-
-        ui.heading("Ritual");
-        ui.label(if let Ok(site) = self.ritual_site.get_single() {
-            site.needs
-                .iter()
-                .map(|need| format!("{}/{} {:?} ", need.available, need.needed, need.what))
-                .collect()
-        } else {
-            String::new()
-        });
-
-        ui.heading("Focus");
+    fn focus_details(&self, ui: &mut egui::Ui) {
         ui.label(
             if let Some(entity) = self.focus.get_single().ok().and_then(|focus| focus.entity) {
-                if let Ok(conveyor) = self.conveyor.get(entity) {
+                if let Ok(conveyor) = self.belt.get(entity) {
                     let mage = self.mage.single();
                     format!(
                         "Conveyor for {:?}. {}",
@@ -556,6 +568,85 @@ impl<'w, 's> Details<'w, 's> {
                 String::new()
             },
         );
+    }
+
+    fn interaction_hint(&self, ui: &mut egui::Ui) {
+        if let Some(entity) = self.focus.get_single().ok().and_then(|focus| focus.entity) {
+            if let Ok(boulder) = self.boulder.get(entity) {
+                ui.label(format!("Boulder of {:?}", boulder.material));
+                if boulder.marked_for_digging {
+                    ui.label("Ⓔ stop dig");
+                } else {
+                    ui.label("Ⓔ let dig");
+                }
+            }
+
+            if let Ok(pile) = self.pile.get(entity) {
+                ui.label(format!("Pile of {:.1} {:?}", pile.amount, pile.load));
+                ui.label("Ⓔ take one");
+            }
+
+            if let Ok(belt) = self.belt.get(entity) {
+                let mage = self.mage.single();
+                ui.label(format!("Conveyor for {:?}", belt.marked_for_thing));
+                match (belt.marked_for_thing, mage.peek_first()) {
+                    (Some(_), None) => {
+                        ui.label("(E) unmark");
+                    }
+                    (_, Some(thing)) => {
+                        ui.label(format!("(E) mark with {:?}", thing));
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Ok(tree) = self.tree.get(entity) {
+                ui.label("Tree");
+                if tree.mark_cut_tree {
+                    ui.label("Ⓔ stop cutting down");
+                } else {
+                    ui.label("Ⓔ let cut down");
+                }
+            }
+
+            if let Ok(fireplace) = self.fireplace.get(entity) {
+                ui.label("Fireplace");
+                if fireplace.lit {
+                    ui.label("Ⓔ damp down");
+                } else {
+                    ui.label("Ⓔ light a fire");
+                }
+            }
+        }
+    }
+
+    fn add_to_ui(&self, ui: &mut egui::Ui) {
+        let display_stack_thing = |s: &Stack| s.thing.map(|t| format!(" {:.1} {:?}", s.amount, t));
+
+        ui.heading("Mage");
+        ui.label(
+            self.mage
+                .get_single()
+                .map(|mage| {
+                    std::iter::once("Carries".to_string())
+                        .chain(mage.inventory.iter().filter_map(display_stack_thing))
+                        .collect::<String>()
+                })
+                .unwrap_or_default(),
+        );
+
+        ui.heading("Ritual");
+        ui.label(if let Ok(site) = self.ritual_site.get_single() {
+            site.needs
+                .iter()
+                .map(|need| format!("{}/{} {:?} ", need.available, need.needed, need.what))
+                .collect()
+        } else {
+            String::new()
+        });
+
+        ui.heading("Focus");
+        self.focus_details(ui);
     }
 }
 
@@ -612,3 +703,33 @@ fn camera_zoom_with_mousewheel(
         tracking.single_mut().offset.y += y;
     }
 }
+
+/*
+font: asset_server.load("NanumBrushScript-Regular.ttf"),
+
+let text_style = TextStyle {
+            font: self.assets.font.clone(),
+            font_size: 96.0,
+            color: Color::WHITE,
+        };
+        let text_alignment = TextAlignment::default();
+
+        let hint = self
+            .cmds
+            .spawn_bundle(Text2dBundle {
+                transform: Transform {
+                    translation: Vec3::new(0.0, 3.0, 0.0),
+                    rotation: Quat::IDENTITY,
+                    scale: Vec3::new(-1.0, 1.0, 1.0) / text_style.font_size / 2.0,
+                },
+                // ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁ ⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏ
+                text: Text::with_section(
+                    "Ⓤ let dig\tⓄ scream\nⒺ dig    \tⓌ not scream",
+                    text_style.clone(),
+                    text_alignment,
+                ),
+                ..Default::default()
+            })
+            .insert(LookAtCamera)
+            .id();
+             */

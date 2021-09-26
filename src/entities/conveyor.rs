@@ -185,7 +185,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                     },
                     GlobalTransform::identity(),
                     Destructable,
-                    FocusObject,
+                    FocusObject::new(),
                 ));
             output = Some(entity);
         }
@@ -227,7 +227,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                     transform,
                     GlobalTransform::identity(),
                     Destructable,
-                    FocusObject,
+                    FocusObject::new(),
                 ))
                 .push_children(&[model]);
         }

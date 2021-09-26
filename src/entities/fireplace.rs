@@ -56,7 +56,7 @@ impl<'w, 's> FireplaceSpawn<'w, 's> {
             transform,
             GlobalTransform::identity(),
             Destructable,
-            FocusObject,
+            FocusObject::new(),
         ));
         entity_cmds.push_children(&[model]);
         entity_cmds

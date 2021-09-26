@@ -1,14 +1,24 @@
 use std::{cmp::Ordering, f32::consts::FRAC_PI_4};
 
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::Camera};
 
 #[derive(Default)]
 pub struct Focus {
     pub entity: Option<Entity>,
     pub before: Option<Entity>,
+    pub screen_pos: Option<Vec2>,
 }
 
-pub struct FocusObject;
+#[derive(Default)]
+pub struct FocusObject {
+    pub focussed: bool,
+}
+
+impl FocusObject {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 pub struct FocusPlugin;
 
@@ -21,7 +31,11 @@ impl Plugin for FocusPlugin {
 fn update_focus(
     mut foci: Query<(&mut Focus, &Transform)>,
     objects: Query<(Entity, &Transform), With<FocusObject>>,
+    camera: Query<(&Camera, &GlobalTransform)>,
+    windows: Res<Windows>,
 ) {
+    let (camera, camera_transform) = camera.single();
+
     for (mut focus, focus_transform) in foci.iter_mut() {
         let mut candidates = Vec::new();
 
@@ -45,6 +59,16 @@ fn update_focus(
         if focus.entity != candidate {
             focus.before = focus.entity;
             focus.entity = candidate;
+        }
+
+        if let Some(entity) = focus.entity {
+            let world_position = objects.get(entity).unwrap().1.translation
+                // TODO: add offset to left because I don't know how to center the UI on that point
+                // TODO: add offset to top because things are often higher and the pos is at the ground
+                + Vec3::new(0.5, 2.5, 0.0);
+            focus.screen_pos = camera.world_to_screen(&windows, camera_transform, world_position);
+        } else {
+            focus.screen_pos = None;
         }
     }
 }

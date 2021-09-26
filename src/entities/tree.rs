@@ -89,7 +89,7 @@ impl<'w, 's> Spawn<'w, 's> {
                 transform,
                 GlobalTransform::identity(),
                 Destructable,
-                FocusObject,
+                FocusObject::new(),
             ))
             .push_children(&[model]);
     }
