@@ -57,8 +57,11 @@ fn load_assets(
         },
         material: materials.add(StandardMaterial {
             base_color: Color::rgb(0.5, 0.4, 0.4),
+            roughness: 1.0,
+            reflectance: 0.0,
+            metallic: 0.0,
             ..Default::default()
         }),
-        mesh: meshes.add(shape::Plane { size: 100.0 }.into()),
+        mesh: meshes.add(shape::Plane { size: 300.0 }.into()),
     });
 }
