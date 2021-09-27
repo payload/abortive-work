@@ -4,6 +4,14 @@ use bevy::{
     prelude::*,
     render::{mesh::Indices, pipeline::PrimitiveTopology},
 };
+use lyon::{
+    geom::{point, Point},
+    lyon_tessellation::{
+        BuffersBuilder, FillOptions, FillTessellator, FillVertex, LineCap, StrokeOptions,
+        StrokeTessellator, StrokeVertex, VertexBuffers,
+    },
+    path::{traits::PathBuilder, Path},
+};
 
 pub fn disk(radius: f32, segments: u16) -> Mesh {
     let mut indices = Vec::<u16>::new();
@@ -123,6 +131,57 @@ pub fn ring(outer_radius: f32, inner_radius: f32, segments: u16) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     mesh.set_indices(Some(Indices::U16(indices)));
     mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh
+}
+
+trait ToPoint {
+    fn to_point(&self) -> Point<f32>;
+}
+
+impl ToPoint for Vec3 {
+    fn to_point(&self) -> Point<f32> {
+        point(self.x, self.z)
+    }
+}
+
+pub fn curve(start: Vec3, mid: Vec3, end: Vec3, width: f32) -> Mesh {
+    let mut normals = Vec::new();
+    let mut uvs = Vec::new();
+    let start = (start - mid).to_point();
+    let end = (end - mid).to_point();
+
+    let mut builder = Path::builder();
+    builder.begin(start);
+    builder.line_to(start * 0.9);
+    builder.cubic_bezier_to(start * 0.5, end * 0.5, end * 0.9);
+    builder.line_to(end);
+    builder.end(false);
+    let path = builder.build();
+
+    let mut vertex_buffer: VertexBuffers<[f32; 3], u16> = VertexBuffers::new();
+    let mut tesselator = StrokeTessellator::new();
+    tesselator
+        .tessellate_path(
+            &path,
+            &StrokeOptions::default()
+                .with_line_width(width)
+                .with_tolerance(0.01),
+            &mut BuffersBuilder::new(&mut vertex_buffer, |vertex: StrokeVertex| {
+                [vertex.position().x, 0.0, vertex.position().y]
+            }),
+        )
+        .unwrap();
+
+    println!("{:?}", vertex_buffer.vertices);
+
+    normals.extend(vertex_buffer.vertices.iter().map(|_| [0.0, 1.0, 0.0]));
+    uvs.extend(vertex_buffer.vertices.iter().map(|_| [0.0, 0.0]));
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    mesh.set_indices(Some(Indices::U16(vertex_buffer.indices)));
+    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, vertex_buffer.vertices);
     mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh

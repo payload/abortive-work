@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_prototype_debug_lines::DebugLines;
 
-use crate::systems::{Destructable, FocusObject, Thing};
+use crate::systems::{curve, Destructable, FocusObject, Thing};
 
 use super::NotGround;
 
@@ -89,6 +89,7 @@ pub struct ConveyorSpawn<'w, 's> {
     assets: Res<'w, ConveyorAssets>,
     belts: Query<'w, 's, &'static Transform, With<ConveyorBelt>>,
     debug: ResMut<'w, DebugLines>,
+    meshes: ResMut<'w, Assets<Mesh>>,
 }
 
 #[derive(Clone, Copy)]
@@ -180,7 +181,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
 
         let mut output = output;
         for (entity, def) in defs.into_iter().rev() {
-            let model = self.model(self.assets.material.clone());
+            let model = self.hq_model(self.assets.material.clone(), &def);
             self.cmds
                 .entity(entity)
                 .push_children(&[model])
@@ -190,7 +191,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                         ..ConveyorBelt::new()
                     },
                     Transform {
-                        rotation: Quat::from_rotation_y(def.angle()),
+                        rotation: Quat::IDENTITY,
                         translation: def.1,
                         scale: Vec3::ONE,
                     },
@@ -311,6 +312,18 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                 material,
                 mesh: self.assets.mesh.clone(),
                 transform: self.assets.transform.clone(),
+                ..Default::default()
+            })
+            .insert(NotGround)
+            .id()
+    }
+
+    fn hq_model(&mut self, material: Handle<StandardMaterial>, def: &BeltDef) -> Entity {
+        self.cmds
+            .spawn_bundle(PbrBundle {
+                material,
+                mesh: self.meshes.add(curve(def.0, def.1, def.2, 0.8)),
+                transform: Transform::from_xyz(0.0, 0.1, 0.0),
                 ..Default::default()
             })
             .insert(NotGround)
