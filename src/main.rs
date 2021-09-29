@@ -14,6 +14,8 @@ use noice::{
 };
 use systems::*;
 
+mod extensions;
+
 use crate::entities::{dump::Dump, ritual_site::RitualSite};
 
 fn main() {
@@ -138,7 +140,7 @@ fn spawn_level_1(
         .insert(CameraTracking::new(0.0, 10.0, -3.0));
     camera.spawn(center);
 
-    fireplace.spawn(Fireplace::new(), at(0, 0));
+    fireplace.spawn(Fireplace::new(), at(-1, 0));
 
     pile.spawn(Pile::new(Thing::Iron, 10.0), at(0, 1));
     ritual_sites.spawn(

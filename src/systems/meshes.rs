@@ -5,13 +5,13 @@ use bevy::{
     render::{mesh::Indices, pipeline::PrimitiveTopology},
 };
 use lyon::{
-    geom::{point, Point},
     lyon_tessellation::{
-        BuffersBuilder, FillOptions, FillTessellator, FillVertex, LineCap, StrokeOptions,
-        StrokeTessellator, StrokeVertex, VertexBuffers,
+        BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, VertexBuffers,
     },
-    path::{traits::PathBuilder, Path},
+    path::Path,
 };
+
+use crate::extensions::ToPoint;
 
 pub fn disk(radius: f32, segments: u16) -> Mesh {
     let mut indices = Vec::<u16>::new();
@@ -134,16 +134,6 @@ pub fn ring(outer_radius: f32, inner_radius: f32, segments: u16) -> Mesh {
     mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh
-}
-
-trait ToPoint {
-    fn to_point(&self) -> Point<f32>;
-}
-
-impl ToPoint for Vec3 {
-    fn to_point(&self) -> Point<f32> {
-        point(self.x, self.z)
-    }
 }
 
 pub fn curve(start: Vec3, mid: Vec3, end: Vec3, width: f32) -> Mesh {

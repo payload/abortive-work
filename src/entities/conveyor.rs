@@ -2,8 +2,12 @@ use std::cmp::Ordering;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_prototype_debug_lines::DebugLines;
+use lyon::geom::CubicBezierSegment;
 
-use crate::systems::{curve, Destructable, FocusObject, Thing};
+use crate::{
+    extensions::{ToPoint, ToVec3},
+    systems::{curve, Destructable, FocusObject, Thing},
+};
 
 use super::NotGround;
 
@@ -22,12 +26,14 @@ pub struct ConveyorBelt {
     items: Vec<Item>,
     length: i32,
     output: Option<Entity>,
+    pub def: BeltDef,
 }
 
 impl ConveyorBelt {
-    pub fn new() -> Self {
+    pub fn new(length: i32, def: BeltDef) -> Self {
         Self {
             length: 100,
+            def,
             ..Self::default()
         }
     }
@@ -92,8 +98,8 @@ pub struct ConveyorSpawn<'w, 's> {
     meshes: ResMut<'w, Assets<Mesh>>,
 }
 
-#[derive(Clone, Copy)]
-struct BeltDef(Vec3, Vec3, Vec3);
+#[derive(Clone, Copy, Default)]
+pub struct BeltDef(pub Vec3, pub Vec3, pub Vec3);
 
 impl BeltDef {
     fn angle(&self) -> f32 {
@@ -188,7 +194,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                 .insert_bundle((
                     ConveyorBelt {
                         output,
-                        ..ConveyorBelt::new()
+                        ..ConveyorBelt::new(100, def)
                     },
                     Transform {
                         rotation: Quat::IDENTITY,
@@ -211,7 +217,7 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
             .map(|(pos, angle)| {
                 (
                     self.cmds.spawn().id(),
-                    ConveyorBelt::new(),
+                    ConveyorBelt::new(100, BeltDef::default()),
                     Transform {
                         rotation: Quat::from_rotation_y(angle),
                         translation: pos,
@@ -519,12 +525,24 @@ fn debug_items(belts: Query<(&ConveyorBelt, &Transform)>, mut debug: ResMut<Debu
         let c_start = c_pos - 0.5 * c_dir;
         let c_end = c_pos + 0.5 * c_dir;
 
+        let BeltDef(a, m, b) = belt.def;
+        let from = (a - m).to_point();
+        let to = (b - m).to_point();
+        let ctrl1 = from * 0.5;
+        let ctrl2 = to * 0.5;
+        let segment = CubicBezierSegment {
+            from,
+            ctrl1,
+            ctrl2,
+            to,
+        };
+
         for item in belt.items.iter() {
             let item_size = item.size as f32 / length_f32;
             let half_length = 0.5 * item_size * c_dir;
             let half_width = 0.5 * item_size * c_normal;
             let linear_item_pos = item.pos as f32 / length_f32;
-            let item_pos = c_start + linear_item_pos * (c_end - c_start);
+            let item_pos = m + segment.sample(linear_item_pos).to_vec3();
             let start = item_pos - half_length;
             let end = item_pos + half_length;
 
