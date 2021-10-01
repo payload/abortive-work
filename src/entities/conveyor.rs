@@ -32,7 +32,7 @@ pub struct ConveyorBelt {
 impl ConveyorBelt {
     pub fn new(length: i32, def: BeltDef) -> Self {
         Self {
-            length: 100,
+            length,
             def,
             ..Self::default()
         }
@@ -71,7 +71,7 @@ impl ConveyorBelt {
             .items
             .iter()
             .enumerate()
-            .find(|(_, item)| item.pos >= min_pos)
+            .find(|(_, item)| item.pos + item.size / 2 >= min_pos)
         {
             self.items.drain(index..);
         }
@@ -100,13 +100,6 @@ pub struct ConveyorSpawn<'w, 's> {
 
 #[derive(Clone, Copy, Default)]
 pub struct BeltDef(pub Vec3, pub Vec3, pub Vec3);
-
-impl BeltDef {
-    fn angle(&self) -> f32 {
-        let v = self.2 - self.0;
-        v.x.atan2(v.z)
-    }
-}
 
 fn get_mids(from: Vec3, to: Vec3) -> Vec<Vec3> {
     let way = to - from;
@@ -516,15 +509,8 @@ fn convey_items(
 }
 
 fn debug_items(belts: Query<(&ConveyorBelt, &Transform)>, mut debug: ResMut<DebugLines>) {
-    for (belt, transform) in belts.iter() {
-        let c_pos = transform.translation;
-        let c_dir = Transform::from_rotation(transform.rotation).mul_vec3(Vec3::Z);
-        let c_normal = Transform::from_rotation(transform.rotation).mul_vec3(Vec3::X);
+    for (belt, _transform) in belts.iter() {
         let length_f32 = belt.length as f32;
-        // ASSUMPTION: conveyor world length is 1.0, so 0.5 * c_dir is half its main direction
-        let c_start = c_pos - 0.5 * c_dir;
-        let c_end = c_pos + 0.5 * c_dir;
-
         let BeltDef(a, m, b) = belt.def;
         let from = (a - m).to_point();
         let to = (b - m).to_point();
@@ -538,18 +524,21 @@ fn debug_items(belts: Query<(&ConveyorBelt, &Transform)>, mut debug: ResMut<Debu
         };
 
         for item in belt.items.iter() {
-            let item_size = item.size as f32 / length_f32;
-            let half_length = 0.5 * item_size * c_dir;
-            let half_width = 0.5 * item_size * c_normal;
+            let item_size = item.size as f32 / 100.0;
             let linear_item_pos = item.pos as f32 / length_f32;
             let item_pos = m + segment.sample(linear_item_pos).to_vec3();
-            let start = item_pos - half_length;
-            let end = item_pos + half_length;
+            let tangent = segment.derivative(linear_item_pos).normalize();
+            let extent = tangent * item_size * 0.5;
+            let side_extent = Vec3::new(extent.x, 0.0, extent.y);
+            let length_extent = Vec3::new(extent.y, 0.0, -extent.x);
+            let start = item_pos - length_extent;
+            let end = item_pos + length_extent;
 
-            debug.line_colored(start - half_width, start + half_width, 0.0, Color::YELLOW);
-            debug.line_colored(end - half_width, end + half_width, 0.0, Color::YELLOW);
-            debug.line_colored(start - half_width, end - half_width, 0.0, Color::YELLOW);
-            debug.line_colored(start + half_width, end + half_width, 0.0, Color::YELLOW);
+            let extent = side_extent;
+            debug.line_colored(start - extent, start + extent, 0.0, Color::YELLOW);
+            debug.line_colored(end - extent, end + extent, 0.0, Color::YELLOW);
+            debug.line_colored(start - extent, end - extent, 0.0, Color::YELLOW);
+            debug.line_colored(start + extent, end + extent, 0.0, Color::YELLOW);
         }
     }
 }

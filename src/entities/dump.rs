@@ -60,12 +60,12 @@ impl<'w, 's> Spawn<'w, 's> {
 
         let pos = transform.translation;
         let start = pos + 0.5 * Vec3::X;
-        let mid = pos + 0.25 * Vec3::X;
+        let mid = pos;
         let end = pos;
         let mut e_cmds = self.cmds.spawn_bundle((
             component,
             transform,
-            ConveyorBelt::new(100, BeltDef(start, mid, end)),
+            ConveyorBelt::new(50, BeltDef(start, mid, end)),
             GlobalTransform::identity(),
             Destructable,
             FocusObject::new(),

@@ -158,7 +158,8 @@ fn spawn_level_1(
             },
         )
         .id();
-    conveyor.build_chain(&[pos(0, 0), pos(0, -1), pos(-1, -1)], Some(dump1));
+    conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3)], Some(dump1));
+    conveyor.build_chain(&[pos(1, -3), pos(-1, -5), pos(-3, -5)], None);
 }
 
 fn remove_trees_from_buildings(
