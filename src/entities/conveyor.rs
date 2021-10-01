@@ -1,11 +1,11 @@
 use std::cmp::Ordering;
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{ecs::system::SystemParam, prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::DebugLines;
 use lyon::geom::CubicBezierSegment;
 
 use crate::{
-    extensions::{ToPoint, ToVec3},
+    extensions::{QueryExt, ToPoint, ToVec3},
     systems::{curve, Destructable, FocusObject, Thing},
 };
 
@@ -83,9 +83,10 @@ pub struct ConveyorPlugin;
 impl Plugin for ConveyorPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system_to_stage(CoreStage::Update, update_lines)
+            .add_system_to_stage(CoreStage::Update, update_ghostchains)
             .add_system_to_stage(CoreStage::PreUpdate, convey_items)
-            .add_system_to_stage(CoreStage::PostUpdate, debug_items);
+            .add_system_to_stage(CoreStage::PostUpdate, debug_items)
+            .add_system(spawn_chains);
     }
 }
 
@@ -93,12 +94,12 @@ impl Plugin for ConveyorPlugin {
 pub struct ConveyorSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, ConveyorAssets>,
-    belts: Query<'w, 's, &'static Transform, With<ConveyorBelt>>,
+    belts: Query<'w, 's, (&'static Transform, &'static ConveyorBelt)>,
     debug: ResMut<'w, DebugLines>,
     meshes: ResMut<'w, Assets<Mesh>>,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct BeltDef(pub Vec3, pub Vec3, pub Vec3);
 
 fn get_mids(from: Vec3, to: Vec3) -> Vec<Vec3> {
@@ -136,38 +137,357 @@ fn debug_belt_defs(debug: &mut DebugLines, defs: &[BeltDef]) {
     }
 }
 
+struct ChainDef {
+    from: ChainLink,
+    to: ChainLink,
+    over: Vec<Vec3>,
+}
+
+pub enum ChainLink {
+    Entity(Entity),
+    Pos(Vec3),
+}
+
+fn spawn_chains(
+    belts: Query<&ConveyorBelt>,
+    chain_defs: Query<(Entity, &ChainDef)>,
+    mut cmds: Commands,
+    mut debug: ResMut<DebugLines>,
+    assets: Res<ConveyorAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for (chain_def_entity, def) in chain_defs.iter() {
+        let (begin_mid, begin) = match def.from {
+            ChainLink::Entity(e) => {
+                if let Ok(belt) = belts.get(e) {
+                    let BeltDef(_, mid, begin) = belt.def;
+                    (2.0 * begin - mid, Some(begin))
+                } else {
+                    continue;
+                }
+            }
+            ChainLink::Pos(mid) => (mid, None),
+        };
+
+        let (end_mid, end) = match def.to {
+            ChainLink::Entity(e) => {
+                if let Ok(belt) = belts.get(e) {
+                    let BeltDef(end, mid, _) = belt.def;
+                    (2.0 * end - mid, Some(end))
+                } else {
+                    continue;
+                }
+            }
+            ChainLink::Pos(mid) => (mid, None),
+        };
+
+        // begin, end, over -> control_defs
+
+        let mut control_defs = Vec::<BeltDef>::new();
+
+        if begin_mid.distance_squared(end_mid) <= 1.0 {
+            // only space for one belt
+            let mid = 0.5 * (begin_mid + end_mid);
+            control_defs.push(match (begin, end) {
+                (Some(begin), Some(end)) => BeltDef(begin, mid, end),
+                (Some(begin), None) => {
+                    BeltDef(begin, begin_mid, 0.5 * (end_mid - begin_mid).normalize())
+                }
+                (None, Some(end)) => BeltDef(0.5 * (begin_mid - end_mid).normalize(), end_mid, end),
+                (None, None) => BeltDef(
+                    0.5 * (begin_mid - mid).normalize(),
+                    mid,
+                    0.5 * (end_mid - mid).normalize(),
+                ),
+            });
+        } else if def.over.is_empty() {
+            // no intermediate points
+            let half_step = 0.5 * (end_mid - begin_mid).normalize();
+            let begin = begin.unwrap_or_else(|| begin_mid - half_step);
+            let end = end.unwrap_or_else(|| end_mid + half_step);
+            control_defs.push(BeltDef(begin, begin_mid, begin_mid + half_step));
+            control_defs.push(BeltDef(end_mid - half_step, end_mid, end));
+        } else {
+            let first_over = def.over.first().unwrap().clone();
+            let last_over = def.over.last().unwrap().clone();
+
+            let step_forward = 0.5 * (first_over - begin_mid).normalize();
+            let begin_begin = begin.unwrap_or_else(|| begin_mid - step_forward);
+            let begin_end = begin_mid + step_forward;
+
+            let step_back = 0.5 * (last_over - end_mid).normalize();
+            let end_end = end.unwrap_or_else(|| end_mid - step_back);
+            let end_begin = end_mid + step_back;
+
+            let begin_def = BeltDef(begin_begin, begin_mid, begin_end);
+            let end_def = BeltDef(end_begin, end_mid, end_end);
+            control_defs.push(begin_def);
+
+            let len = def.over.len();
+            let mut mid_before = begin_mid;
+            for index in 0..len {
+                let mid = def.over[index];
+                let next_mid = if index == len - 1 {
+                    end_mid
+                } else {
+                    def.over[index + 1]
+                };
+
+                control_defs.push(BeltDef(
+                    mid + 0.5 * (mid_before - mid).normalize(),
+                    mid,
+                    mid + 0.5 * (next_mid - mid).normalize(),
+                ));
+                mid_before = mid;
+            }
+
+            control_defs.push(end_def);
+        }
+
+        // control_defs -> belt_defs
+
+        let mut belt_defs = Vec::<BeltDef>::new();
+
+        if control_defs.len() == 1 {
+            belt_defs = control_defs;
+        } else {
+            belt_defs.push(control_defs.first().unwrap().clone());
+
+            for window in control_defs.windows(2) {
+                let begin_def = window[0];
+                let end_def = window[1];
+                let BeltDef(_, begin_mid, begin_end) = begin_def.clone();
+                let BeltDef(end_begin, end_mid, _) = end_def.clone();
+
+                let difference = end_mid - begin_mid;
+                let forward = difference.normalize();
+                let half_step = 0.5 * forward;
+
+                let distance = (end_begin - begin_end).length();
+                let short_distance = distance.floor();
+                let steps = short_distance as usize;
+
+                let mut begin = begin_end;
+                let mut mid = begin_mid + forward;
+                // TODO here could be an off by one error
+                for step in 0..steps {
+                    let end = if step < steps - 1 || distance - short_distance > 0.4 {
+                        mid + half_step
+                    } else {
+                        mid + (distance - short_distance) * half_step
+                    };
+                    belt_defs.push(BeltDef(begin, mid, end));
+                    mid += forward;
+                    begin = end;
+                }
+
+                if distance - short_distance > 0.0 {
+                    belt_defs.push(BeltDef(begin, 0.5 * (begin + end_begin), end_begin));
+                }
+
+                belt_defs.push(end_def);
+            }
+        }
+
+        // belt_defs -> spawn
+
+        let defs: Vec<_> = belt_defs
+            .into_iter()
+            .map(|def| (cmds.spawn().id(), def))
+            .collect();
+
+        cmds.spawn().insert(ConveyorChain {
+            belts: defs.iter().map(|p| p.0).collect(),
+        });
+
+        debug_belt_defs(
+            &mut debug,
+            &defs.iter().map(|(_, def)| def).copied().collect::<Vec<_>>(),
+        );
+
+        let mut output = if let ChainLink::Entity(e) = def.to {
+            Some(e)
+        } else {
+            None
+        };
+
+        let mut flip = false;
+        for (entity, def) in defs.into_iter().rev() {
+            let model = cmds
+                .spawn_bundle(PbrBundle {
+                    material: assets.material.clone(),
+                    mesh: meshes.add(curve(def.0, def.1, def.2, if flip { 0.8 } else { 0.7 })),
+                    transform: Transform::from_xyz(0.0, 0.1, 0.0),
+                    ..Default::default()
+                })
+                .insert(NotGround)
+                .id();
+
+            flip = !flip;
+
+            cmds.entity(entity).push_children(&[model]).insert_bundle((
+                ConveyorBelt {
+                    output,
+                    ..ConveyorBelt::new((def.2.distance(def.0) * 100.0).floor() as i32, def)
+                },
+                Transform {
+                    rotation: Quat::IDENTITY,
+                    translation: def.1,
+                    scale: Vec3::ONE,
+                },
+                GlobalTransform::identity(),
+                Destructable,
+                FocusObject::new(),
+            ));
+            output = Some(entity);
+        }
+
+        cmds.entity(chain_def_entity).despawn();
+    }
+}
+
+pub fn create_chain_definition(points: &[Vec3], output: Option<BeltDef>) -> Vec<BeltDef> {
+    assert!(points.len() >= 2);
+    let mut from = points[0];
+    let mut chain_of_mid_points = vec![from];
+
+    for to in &points[1..] {
+        chain_of_mid_points.extend(&get_mids(from, *to)[1..]);
+        from = *chain_of_mid_points.last().unwrap();
+    }
+
+    let defs: Vec<_> = (0..chain_of_mid_points.len())
+        .map(|index| {
+            if index > 0 && index < chain_of_mid_points.len() - 1 {
+                let before = chain_of_mid_points[index - 1];
+                let mid = chain_of_mid_points[index];
+                let after = chain_of_mid_points[index + 1];
+                BeltDef(mid + 0.5 * (before - mid), mid, mid + 0.5 * (after - mid))
+            } else if index == 0 {
+                let mid = chain_of_mid_points[index];
+                let after = chain_of_mid_points[index + 1];
+                BeltDef(mid - 0.5 * (after - mid), mid, mid + 0.5 * (after - mid))
+            } else {
+                if let Some(belt_def) = output {
+                    let before = chain_of_mid_points[index - 1];
+                    let mid = chain_of_mid_points[index];
+                    let end = belt_def.0;
+                    BeltDef(mid + 0.5 * (before - mid), mid, end)
+                } else {
+                    let before = chain_of_mid_points[index - 1];
+                    let mid = chain_of_mid_points[index];
+                    BeltDef(mid + 0.5 * (before - mid), mid, mid - 0.5 * (before - mid))
+                }
+            }
+        })
+        .collect();
+    defs
+}
+
 impl<'w, 's> ConveyorSpawn<'w, 's> {
-    pub fn build_chain(&mut self, points: &[Vec3], output: Option<Entity>) {
+    pub fn spawn_chain(&mut self, from: ChainLink, to: ChainLink) {
+        self.cmds.spawn_bundle((ChainDef {
+            from,
+            to,
+            over: Vec::new(),
+        },));
+    }
+
+    pub fn spawn_chain_over(&mut self, from: ChainLink, to: ChainLink, over: &[Vec3]) {
+        self.cmds.spawn_bundle((ChainDef {
+            from,
+            to,
+            over: over.iter().copied().collect(),
+        },));
+    }
+
+    pub fn create_chain_definition(
+        &mut self,
+        points: &[Vec3],
+        output: Option<BeltDef>,
+    ) -> Vec<(Option<Entity>, BeltDef)> {
         assert!(points.len() >= 2);
         let mut from = points[0];
-        let mut chain = vec![from];
+        let mut chain_of_mid_points = vec![from];
 
         for to in &points[1..] {
-            chain.extend(&get_mids(from, *to)[1..]);
-            from = *chain.last().unwrap();
+            chain_of_mid_points.extend(&get_mids(from, *to)[1..]);
+            from = *chain_of_mid_points.last().unwrap();
         }
+
+        let defs: Vec<_> = (0..chain_of_mid_points.len())
+            .map(|index| {
+                if index > 0 && index < chain_of_mid_points.len() - 1 {
+                    let before = chain_of_mid_points[index - 1];
+                    let mid = chain_of_mid_points[index];
+                    let after = chain_of_mid_points[index + 1];
+                    BeltDef(mid + 0.5 * (before - mid), mid, mid + 0.5 * (after - mid))
+                } else if index == 0 {
+                    let mid = chain_of_mid_points[index];
+                    let after = chain_of_mid_points[index + 1];
+                    BeltDef(mid - 0.5 * (after - mid), mid, mid + 0.5 * (after - mid))
+                } else {
+                    if let Some(belt_def) = output {
+                        let before = chain_of_mid_points[index - 1];
+                        let mid = chain_of_mid_points[index];
+                        let end = belt_def.0;
+                        BeltDef(mid + 0.5 * (before - mid), mid, end)
+                    } else {
+                        let before = chain_of_mid_points[index - 1];
+                        let mid = chain_of_mid_points[index];
+                        BeltDef(mid + 0.5 * (before - mid), mid, mid - 0.5 * (before - mid))
+                    }
+                }
+            })
+            .map(|def| (None, def))
+            .collect();
+        defs
+    }
+
+    pub fn build_chain(&mut self, points: &[Vec3], output: Option<Entity>) -> (Entity, Entity) {
+        assert!(points.len() >= 2);
+        let mut from = points[0];
+        let mut chain_of_mid_points = vec![from];
+
+        for to in &points[1..] {
+            chain_of_mid_points.extend(&get_mids(from, *to)[1..]);
+            from = *chain_of_mid_points.last().unwrap();
+        }
+
+        let output_belt_def = self.belts.get_some(output).map(|(_, belt)| belt.def);
+        let output_belt_def = output.and_then(|e| self.belts.get(e).map(|(_, belt)| belt.def).ok());
 
         //debug_vec3_strip(&mut self.debug, &chain);
 
-        let defs: Vec<(Entity, BeltDef)> = (0..chain.len())
+        let defs: Vec<(Entity, BeltDef)> = (0..chain_of_mid_points.len())
             .map(|index| {
-                if index > 0 && index < chain.len() - 1 {
-                    let before = chain[index - 1];
-                    let mid = chain[index];
-                    let after = chain[index + 1];
+                if index > 0 && index < chain_of_mid_points.len() - 1 {
+                    let before = chain_of_mid_points[index - 1];
+                    let mid = chain_of_mid_points[index];
+                    let after = chain_of_mid_points[index + 1];
                     BeltDef(mid + 0.5 * (before - mid), mid, mid + 0.5 * (after - mid))
                 } else if index == 0 {
-                    let mid = chain[index];
-                    let after = chain[index + 1];
+                    let mid = chain_of_mid_points[index];
+                    let after = chain_of_mid_points[index + 1];
                     BeltDef(mid - 0.5 * (after - mid), mid, mid + 0.5 * (after - mid))
                 } else {
-                    let before = chain[index - 1];
-                    let mid = chain[index];
-                    BeltDef(mid + 0.5 * (before - mid), mid, mid - 0.5 * (before - mid))
+                    if let Some(belt_def) = output_belt_def {
+                        let before = chain_of_mid_points[index - 1];
+                        let mid = chain_of_mid_points[index];
+                        let end = belt_def.0;
+                        BeltDef(mid + 0.5 * (before - mid), mid, end)
+                    } else {
+                        let before = chain_of_mid_points[index - 1];
+                        let mid = chain_of_mid_points[index];
+                        BeltDef(mid + 0.5 * (before - mid), mid, mid - 0.5 * (before - mid))
+                    }
                 }
             })
             .map(|def| (self.cmds.spawn().id(), def))
             .collect();
+
+        let start_entity = defs.first().expect("defs first").0;
+        let end_entity = defs.last().expect("defs last").0;
 
         self.cmds.spawn().insert(ConveyorChain {
             belts: defs.iter().map(|p| p.0).chain(output.into_iter()).collect(),
@@ -200,11 +520,14 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                 ));
             output = Some(entity);
         }
+
+        (start_entity, end_entity)
     }
 
     pub fn spawn_line<'a>(&'a mut self, from: Vec3, to: Vec3) {
-        let from = self.snap_to_belt(from);
-        let to = self.snap_to_belt(to);
+        eprintln!("warning, spawn_line, bad implementation");
+        // let from = self.snap_to_belt(from);
+        // let to = self.snap_to_belt(to);
 
         let mut line: Vec<_> = Self::iter_steps(from, to)
             .map(|(pos, angle)| {
@@ -244,10 +567,10 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
         }
     }
 
-    pub fn snap_to_belt(&self, from: Vec3) -> Vec3 {
+    pub fn snap_to_belt(&self, from: Vec3) -> Result<BeltDef, Vec3> {
         self.belts
             .iter()
-            .map(|t| (t.translation, t.translation.distance_squared(from)))
+            .map(|(_, belt)| (belt.def, belt.def.2.distance_squared(from)))
             .filter(|(_, d)| *d < 1.0)
             .min_by(|(_, a), (_, b)| {
                 if a < b {
@@ -256,14 +579,14 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                     Ordering::Greater
                 }
             })
-            .map(|(pos, _)| pos)
-            .unwrap_or(from)
+            .map(|(def, _)| Ok(def))
+            .unwrap_or(Err(from))
     }
 
     pub fn ghostline_from_point_to_entity(&mut self, from: Vec3, to: Entity) -> Entity {
         self.cmds
             .spawn_bundle((
-                LineFrom { to },
+                GhostchainFromHere { to },
                 Transform::from_translation(from),
                 GlobalTransform::identity(),
             ))
@@ -363,19 +686,19 @@ fn load_assets(
     });
 }
 
-struct LineFrom {
+struct GhostchainFromHere {
     to: Entity,
 }
 
-struct LineParent;
+struct GhostchainParent;
 
-fn update_lines(
+fn update_ghostchains(
     mut frame: Local<usize>,
     mut cmds: Commands,
     mut conveyor: ConveyorSpawn,
-    ghostlines: Query<(&Transform, &LineFrom)>,
+    chains: Query<(&Transform, &GhostchainFromHere)>,
     transforms: Query<&Transform>,
-    parents: Query<Entity, With<LineParent>>,
+    parents: Query<Entity, With<GhostchainParent>>,
 ) {
     if *frame < 2 {
         *frame += 1;
@@ -388,11 +711,11 @@ fn update_lines(
         cmds.entity(parent).despawn_recursive();
     }
 
-    for (from_transform, ghostline) in ghostlines.iter() {
-        if let Ok(to_transform) = transforms.get(ghostline.to) {
+    for (from_transform, from_here) in chains.iter() {
+        if let Ok(to_transform) = transforms.get(from_here.to) {
             let parent = cmds
                 .spawn_bundle((
-                    LineParent,
+                    GhostchainParent,
                     Transform::identity(),
                     GlobalTransform::identity(),
                 ))
@@ -400,7 +723,11 @@ fn update_lines(
 
             let from = conveyor.snap_to_belt(from_transform.translation);
             let to = conveyor.snap_to_belt(to_transform.translation);
-            conveyor.spawn_ghostline(from, to, parent);
+
+            match (from, to) {
+                (Err(from), Err(to)) => conveyor.spawn_ghostline(from, to, parent),
+                _ => {}
+            }
         }
     }
 }
@@ -467,7 +794,7 @@ fn convey_items(
                     let mut belts = query_belts.q0();
                     let mut belt = belts.get_mut(belt_entity).unwrap();
                     let mut transfer_index = None;
-                    let speed = 1;
+                    let speed = 5;
                     let length = belt.length;
                     let mut right = length + next_belt_left; // note that next belt left could be negative
 
@@ -493,7 +820,7 @@ fn convey_items(
                 } else {
                     let mut belts = query_belts.q0();
                     let mut belt = belts.get_mut(belt_entity).unwrap();
-                    let speed = 1;
+                    let speed = 5;
                     let mut right = belt.length;
 
                     for item in belt.items.iter_mut().rev() {
