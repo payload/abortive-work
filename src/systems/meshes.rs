@@ -164,8 +164,6 @@ pub fn curve(start: Vec3, mid: Vec3, end: Vec3, width: f32) -> Mesh {
         )
         .unwrap();
 
-    println!("{:?}", vertex_buffer.vertices);
-
     normals.extend(vertex_buffer.vertices.iter().map(|_| [0.0, 1.0, 0.0]));
     uvs.extend(vertex_buffer.vertices.iter().map(|_| [0.0, 0.0]));
 
