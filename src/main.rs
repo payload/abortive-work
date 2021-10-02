@@ -163,10 +163,8 @@ fn spawn_level_1(
             },
         )
         .id();
-    //conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3)], Some(dump1));
 
-    //conveyor.spawn_chain(ChainLink::Pos(pos(1, -3)), ChainLink::Pos(pos(-3, -5)));
-
+    conveyor.spawn_chain(ChainLink::Pos(pos(-4, -7)), ChainLink::Pos(pos(-4, -3)));
     conveyor.spawn_chain_over(
         ChainLink::Pos(pos(1, -1)),
         ChainLink::Entity(dump1),

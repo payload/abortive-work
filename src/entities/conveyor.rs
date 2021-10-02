@@ -1,11 +1,11 @@
 use std::cmp::Ordering;
 
-use bevy::{ecs::system::SystemParam, prelude::*, utils::HashMap};
+use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_prototype_debug_lines::DebugLines;
 use lyon::geom::CubicBezierSegment;
 
 use crate::{
-    extensions::{QueryExt, ToPoint, ToVec3},
+    extensions::{ToPoint, ToVec3},
     systems::{curve, DebugConfig, Destructable, FocusObject, Thing},
 };
 
@@ -96,25 +96,10 @@ pub struct ConveyorSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, ConveyorAssets>,
     belts: Query<'w, 's, (&'static Transform, &'static ConveyorBelt)>,
-    debug: ResMut<'w, DebugLines>,
-    meshes: ResMut<'w, Assets<Mesh>>,
 }
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct BeltDef(pub Vec3, pub Vec3, pub Vec3);
-
-fn get_mids(from: Vec3, to: Vec3) -> Vec<Vec3> {
-    let way = to - from;
-    let dir = way.normalize();
-    let steps = way.length().floor() as i32;
-    (0..=steps)
-        .map(move |step| {
-            let step = step as f32;
-            let pos = from + dir * step;
-            pos
-        })
-        .collect()
-}
 
 #[allow(unused)]
 fn debug_vec3_strip(debug: &mut DebugLines, chain: &[Vec3]) {
@@ -381,44 +366,6 @@ fn spawn_chains(
     }
 }
 
-pub fn create_chain_definition(points: &[Vec3], output: Option<BeltDef>) -> Vec<BeltDef> {
-    assert!(points.len() >= 2);
-    let mut from = points[0];
-    let mut chain_of_mid_points = vec![from];
-
-    for to in &points[1..] {
-        chain_of_mid_points.extend(&get_mids(from, *to)[1..]);
-        from = *chain_of_mid_points.last().unwrap();
-    }
-
-    let defs: Vec<_> = (0..chain_of_mid_points.len())
-        .map(|index| {
-            if index > 0 && index < chain_of_mid_points.len() - 1 {
-                let before = chain_of_mid_points[index - 1];
-                let mid = chain_of_mid_points[index];
-                let after = chain_of_mid_points[index + 1];
-                BeltDef(mid + 0.5 * (before - mid), mid, mid + 0.5 * (after - mid))
-            } else if index == 0 {
-                let mid = chain_of_mid_points[index];
-                let after = chain_of_mid_points[index + 1];
-                BeltDef(mid - 0.5 * (after - mid), mid, mid + 0.5 * (after - mid))
-            } else {
-                if let Some(belt_def) = output {
-                    let before = chain_of_mid_points[index - 1];
-                    let mid = chain_of_mid_points[index];
-                    let end = belt_def.0;
-                    BeltDef(mid + 0.5 * (before - mid), mid, end)
-                } else {
-                    let before = chain_of_mid_points[index - 1];
-                    let mid = chain_of_mid_points[index];
-                    BeltDef(mid + 0.5 * (before - mid), mid, mid - 0.5 * (before - mid))
-                }
-            }
-        })
-        .collect();
-    defs
-}
-
 impl<'w, 's> ConveyorSpawn<'w, 's> {
     pub fn spawn_chain(&mut self, from: ChainLink, to: ChainLink) {
         self.cmds.spawn_bundle((ChainDef {
@@ -434,124 +381,6 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
             to,
             over: over.iter().copied().collect(),
         },));
-    }
-
-    pub fn create_chain_definition(
-        &mut self,
-        points: &[Vec3],
-        output: Option<BeltDef>,
-    ) -> Vec<(Option<Entity>, BeltDef)> {
-        assert!(points.len() >= 2);
-        let mut from = points[0];
-        let mut chain_of_mid_points = vec![from];
-
-        for to in &points[1..] {
-            chain_of_mid_points.extend(&get_mids(from, *to)[1..]);
-            from = *chain_of_mid_points.last().unwrap();
-        }
-
-        let defs: Vec<_> = (0..chain_of_mid_points.len())
-            .map(|index| {
-                if index > 0 && index < chain_of_mid_points.len() - 1 {
-                    let before = chain_of_mid_points[index - 1];
-                    let mid = chain_of_mid_points[index];
-                    let after = chain_of_mid_points[index + 1];
-                    BeltDef(mid + 0.5 * (before - mid), mid, mid + 0.5 * (after - mid))
-                } else if index == 0 {
-                    let mid = chain_of_mid_points[index];
-                    let after = chain_of_mid_points[index + 1];
-                    BeltDef(mid - 0.5 * (after - mid), mid, mid + 0.5 * (after - mid))
-                } else {
-                    if let Some(belt_def) = output {
-                        let before = chain_of_mid_points[index - 1];
-                        let mid = chain_of_mid_points[index];
-                        let end = belt_def.0;
-                        BeltDef(mid + 0.5 * (before - mid), mid, end)
-                    } else {
-                        let before = chain_of_mid_points[index - 1];
-                        let mid = chain_of_mid_points[index];
-                        BeltDef(mid + 0.5 * (before - mid), mid, mid - 0.5 * (before - mid))
-                    }
-                }
-            })
-            .map(|def| (None, def))
-            .collect();
-        defs
-    }
-
-    pub fn build_chain(&mut self, points: &[Vec3], output: Option<Entity>) -> (Entity, Entity) {
-        assert!(points.len() >= 2);
-        let mut from = points[0];
-        let mut chain_of_mid_points = vec![from];
-
-        for to in &points[1..] {
-            chain_of_mid_points.extend(&get_mids(from, *to)[1..]);
-            from = *chain_of_mid_points.last().unwrap();
-        }
-
-        let output_belt_def = self.belts.get_some(output).map(|(_, belt)| belt.def);
-        let output_belt_def = output.and_then(|e| self.belts.get(e).map(|(_, belt)| belt.def).ok());
-
-        //debug_vec3_strip(&mut self.debug, &chain);
-
-        let defs: Vec<(Entity, BeltDef)> = (0..chain_of_mid_points.len())
-            .map(|index| {
-                if index > 0 && index < chain_of_mid_points.len() - 1 {
-                    let before = chain_of_mid_points[index - 1];
-                    let mid = chain_of_mid_points[index];
-                    let after = chain_of_mid_points[index + 1];
-                    BeltDef(mid + 0.5 * (before - mid), mid, mid + 0.5 * (after - mid))
-                } else if index == 0 {
-                    let mid = chain_of_mid_points[index];
-                    let after = chain_of_mid_points[index + 1];
-                    BeltDef(mid - 0.5 * (after - mid), mid, mid + 0.5 * (after - mid))
-                } else {
-                    if let Some(belt_def) = output_belt_def {
-                        let before = chain_of_mid_points[index - 1];
-                        let mid = chain_of_mid_points[index];
-                        let end = belt_def.0;
-                        BeltDef(mid + 0.5 * (before - mid), mid, end)
-                    } else {
-                        let before = chain_of_mid_points[index - 1];
-                        let mid = chain_of_mid_points[index];
-                        BeltDef(mid + 0.5 * (before - mid), mid, mid - 0.5 * (before - mid))
-                    }
-                }
-            })
-            .map(|def| (self.cmds.spawn().id(), def))
-            .collect();
-
-        let start_entity = defs.first().expect("defs first").0;
-        let end_entity = defs.last().expect("defs last").0;
-
-        self.cmds.spawn().insert(ConveyorChain {
-            belts: defs.iter().map(|p| p.0).chain(output.into_iter()).collect(),
-        });
-
-        let mut output = output;
-        for (entity, def) in defs.into_iter().rev() {
-            let model = self.hq_model(self.assets.material.clone(), &def);
-            self.cmds
-                .entity(entity)
-                .push_children(&[model])
-                .insert_bundle((
-                    ConveyorBelt {
-                        output,
-                        ..ConveyorBelt::new(100, def)
-                    },
-                    Transform {
-                        rotation: Quat::IDENTITY,
-                        translation: def.1,
-                        scale: Vec3::ONE,
-                    },
-                    GlobalTransform::identity(),
-                    Destructable,
-                    FocusObject::new(),
-                ));
-            output = Some(entity);
-        }
-
-        (start_entity, end_entity)
     }
 
     pub fn spawn_line<'a>(&'a mut self, from: Vec3, to: Vec3) {
@@ -664,18 +493,6 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
                 material,
                 mesh: self.assets.mesh.clone(),
                 transform: self.assets.transform.clone(),
-                ..Default::default()
-            })
-            .insert(NotGround)
-            .id()
-    }
-
-    fn hq_model(&mut self, material: Handle<StandardMaterial>, def: &BeltDef) -> Entity {
-        self.cmds
-            .spawn_bundle(PbrBundle {
-                material,
-                mesh: self.meshes.add(curve(def.0, def.1, def.2, 0.8)),
-                transform: Transform::from_xyz(0.0, 0.1, 0.0),
                 ..Default::default()
             })
             .insert(NotGround)
