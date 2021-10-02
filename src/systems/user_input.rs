@@ -44,6 +44,7 @@ impl Plugin for UserInputPlugin {
 #[derive(Default)]
 pub struct DebugConfig {
     pub imp_walk_destination: bool,
+    pub spawn_chains_belt_def_duration: f32,
 }
 
 #[derive(Debug)]
@@ -479,6 +480,11 @@ fn example_ui(
             ui.checkbox(
                 &mut debug_config.imp_walk_destination,
                 "imp walk destination",
+            );
+            ui.add(
+                egui::Slider::new(&mut debug_config.spawn_chains_belt_def_duration, 0.0..=10.0)
+                    .integer()
+                    .text("spawn chains belt defs duration"),
             );
 
             ui.add_space(8.0);

@@ -1,6 +1,6 @@
 use std::f32::consts::TAU;
 
-use bevy::prelude::*;
+use bevy::{ecs::schedule::ShouldRun, prelude::*};
 
 mod entities;
 use bevy_prototype_debug_lines::DebugLinesPlugin;
@@ -30,7 +30,12 @@ fn main() {
         .add_plugin(SystemsPlugin)
         .add_plugin(DebugLinesPlugin)
         .add_startup_system(spawn_level_1)
-        .add_startup_system_to_stage(StartupStage::PostStartup, remove_trees_from_buildings)
+        .add_system_set_to_stage(
+            CoreStage::PostUpdate,
+            SystemSet::new()
+                .with_run_criteria(once)
+                .with_system(remove_trees_from_buildings),
+        )
         .run();
 
     // a portal which produces imps next to it
@@ -158,8 +163,22 @@ fn spawn_level_1(
             },
         )
         .id();
-    conveyor.build_chain(&[pos(1, -1), pos(-1, -3), pos(-3, -3)], Some(dump1));
-    conveyor.build_chain(&[pos(1, -3), pos(-1, -5), pos(-3, -5)], None);
+
+    conveyor.spawn_chain(ChainLink::Pos(pos(-4, -7)), ChainLink::Pos(pos(-4, -3)));
+    conveyor.spawn_chain_over(
+        ChainLink::Pos(pos(1, -1)),
+        ChainLink::Entity(dump1),
+        &[center + Vec3::new(1.0, 0.0, -4.0), pos(2, -9), pos(-3, -7)],
+    );
+}
+
+fn once(mut has_run: Local<bool>) -> ShouldRun {
+    if !*has_run {
+        *has_run = true;
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
+    }
 }
 
 fn remove_trees_from_buildings(
@@ -169,7 +188,7 @@ fn remove_trees_from_buildings(
 ) {
     for (a_tree, t_tree) in trees.iter() {
         for t_other in others.iter() {
-            if t_tree.translation.distance_squared(t_other.translation) < 1.0 {
+            if t_tree.translation.distance_squared(t_other.translation) < 4.0 {
                 cmds.entity(a_tree).despawn_recursive();
             }
         }
