@@ -1,8 +1,5 @@
 use crate::systems::*;
-use bevy::{
-    ecs::system::{EntityCommands, SystemParam},
-    prelude::*,
-};
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use super::{BeltDef, ConveyorBelt};
 
@@ -31,12 +28,58 @@ pub struct Spawn<'w, 's> {
     res: Res<'w, Resource>,
 }
 
+#[derive(Clone)]
+pub struct Entities {
+    pub building: Entity,
+    pub input_belt: Entity,
+    pub output_belt: Entity,
+    pub model: Entity,
+}
+
 impl<'w, 's> Spawn<'w, 's> {
-    pub fn spawn<'a>(
-        &'a mut self,
-        component: Transformer,
-        transform: Transform,
-    ) -> EntityCommands<'w, 's, 'a> {
+    pub fn spawn(&mut self, component: Transformer, transform: Transform) -> Entities {
+        let model = self.model();
+
+        let pos = transform.translation;
+        let z = transform.rotation.mul_vec3(Vec3::Z);
+        let input_belt = BeltDef(pos + 0.5 * z, pos + 0.25 * z, pos + 0.25 * z);
+        let output_belt = BeltDef(pos - 0.25 * z, pos - 0.25 * z, pos - 0.5 * z);
+
+        let input_belt = self
+            .cmds
+            .spawn()
+            .insert(ConveyorBelt::new(25, input_belt))
+            .id();
+        let output_belt = self
+            .cmds
+            .spawn()
+            .insert(ConveyorBelt::new(25, output_belt))
+            .id();
+
+        let mut e_cmds = self.cmds.spawn();
+        let building = e_cmds.id();
+        let entities = Entities {
+            building,
+            input_belt,
+            output_belt,
+            model,
+        };
+
+        e_cmds
+            .insert_bundle((
+                component,
+                transform,
+                entities.clone(),
+                GlobalTransform::identity(),
+                Destructable,
+                FocusObject::new(),
+            ))
+            .push_children(&[model, input_belt, output_belt]);
+
+        entities
+    }
+
+    fn model(&mut self) -> Entity {
         let hole = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -47,8 +90,7 @@ impl<'w, 's> Spawn<'w, 's> {
             })
             .id();
 
-        let model = self
-            .cmds
+        self.cmds
             .spawn_bundle(PbrBundle {
                 transform: self.res.transform.clone(),
                 material: self.res.material.clone(),
@@ -57,23 +99,7 @@ impl<'w, 's> Spawn<'w, 's> {
             })
             .insert(Model)
             .push_children(&[hole])
-            .id();
-
-        let pos = transform.translation;
-        let z = transform.rotation.mul_vec3(Vec3::Z);
-        let start = pos + 0.5 * z;
-        let mid = pos;
-        let end = pos - 0.5 * z;
-        let mut e_cmds = self.cmds.spawn_bundle((
-            component,
-            transform,
-            ConveyorBelt::new(100, BeltDef(start, mid, end)),
-            GlobalTransform::identity(),
-            Destructable,
-            FocusObject::new(),
-        ));
-        e_cmds.push_children(&[model]);
-        e_cmds
+            .id()
     }
 }
 
@@ -114,11 +140,23 @@ fn init_resource(
     });
 }
 
-fn transform_items(mut transformers: Query<(&mut ConveyorBelt, &mut Transformer)>) {
-    for (mut belt, _transformer) in transformers.iter_mut() {
-        let things = belt.drain_items_after_pos(45);
-        for thing in things {
-            belt.force_insert_thing(thing, 100);
+fn transform_items(
+    mut belts: Query<&mut ConveyorBelt>,
+    transformers: Query<(&Transformer, &Entities)>,
+) {
+    for (_transformer, entities) in transformers.iter() {
+        let things = belts
+            .get_mut(entities.input_belt)
+            .map(|mut belt| belt.drain_items_after_pos(10));
+
+        if let Ok(things) = things {
+            if !things.is_empty() {
+                if let Ok(mut belt) = belts.get_mut(entities.output_belt) {
+                    for thing in things {
+                        belt.force_insert_thing(thing, 0);
+                    }
+                }
+            }
         }
     }
 }

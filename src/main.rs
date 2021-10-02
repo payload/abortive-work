@@ -169,19 +169,20 @@ fn spawn_level_1(
         )
         .id();
 
-    let transformer1 = transformer
-        .spawn(
-            Transformer::new(),
-            at(-5, -3).with_rotation(Quat::from_rotation_y(125.0f32.to_radians())),
-        )
-        .id();
+    let transformer1 = transformer.spawn(
+        Transformer::new(),
+        at(-5, -3).with_rotation(Quat::from_rotation_y(125.0f32.to_radians())),
+    );
 
     conveyor.spawn_chain_over(
         ChainLink::Entity(generator1),
-        ChainLink::Entity(transformer1),
+        ChainLink::Entity(transformer1.input_belt),
         &[center + Vec3::new(1.0, 0.0, -4.0), pos(2, -9), pos(-3, -7)],
     );
-    conveyor.spawn_chain(ChainLink::Entity(transformer1), ChainLink::Entity(dump1));
+    conveyor.spawn_chain(
+        ChainLink::Entity(transformer1.output_belt),
+        ChainLink::Entity(dump1),
+    );
 
     // to prevent unused ChainLink::Pos
     conveyor.spawn_chain(ChainLink::Pos(pos(-30, -30)), ChainLink::Pos(pos(-40, -30)));
