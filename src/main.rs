@@ -161,6 +161,12 @@ fn spawn_level_1(
             at(-9, -3).with_rotation(Quat::from_rotation_y(95.0f32.to_radians())),
         )
         .id();
+    let dump2 = dump
+        .spawn(
+            Dump::new(),
+            at(-9, 0).with_rotation(Quat::from_rotation_y(90.0f32.to_radians())),
+        )
+        .id();
 
     let generator1 = generator
         .spawn(
@@ -180,8 +186,12 @@ fn spawn_level_1(
         &[center + Vec3::new(1.0, 0.0, -4.0), pos(2, -9), pos(-3, -7)],
     );
     conveyor.spawn_chain(
-        ChainLink::Entity(transformer1.output_belt),
+        ChainLink::Entity(transformer1.output_belt1),
         ChainLink::Entity(dump1),
+    );
+    conveyor.spawn_chain(
+        ChainLink::Entity(transformer1.output_belt2),
+        ChainLink::Entity(dump2),
     );
 
     // to prevent unused ChainLink::Pos

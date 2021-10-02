@@ -4,7 +4,9 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use super::{BeltDef, ConveyorBelt};
 
 #[derive(Default)]
-pub struct Transformer {}
+pub struct Transformer {
+    output: usize,
+}
 
 pub struct Model;
 pub struct Plugin;
@@ -32,7 +34,8 @@ pub struct Spawn<'w, 's> {
 pub struct Entities {
     pub building: Entity,
     pub input_belt: Entity,
-    pub output_belt: Entity,
+    pub output_belt1: Entity,
+    pub output_belt2: Entity,
     pub model: Entity,
 }
 
@@ -42,18 +45,25 @@ impl<'w, 's> Spawn<'w, 's> {
 
         let pos = transform.translation;
         let z = transform.rotation.mul_vec3(Vec3::Z);
+        let x = transform.rotation.mul_vec3(Vec3::X);
         let input_belt = BeltDef(pos + 0.5 * z, pos + 0.25 * z, pos + 0.25 * z);
-        let output_belt = BeltDef(pos - 0.25 * z, pos - 0.25 * z, pos - 0.5 * z);
+        let output_belt1 = BeltDef(pos - 0.25 * z, pos - 0.25 * z, pos - 0.5 * z);
+        let output_belt2 = BeltDef(pos - 0.25 * x, pos - 0.25 * x, pos - 0.5 * x);
 
         let input_belt = self
             .cmds
             .spawn()
             .insert(ConveyorBelt::new(25, input_belt))
             .id();
-        let output_belt = self
+        let output_belt1 = self
             .cmds
             .spawn()
-            .insert(ConveyorBelt::new(25, output_belt))
+            .insert(ConveyorBelt::new(25, output_belt1))
+            .id();
+        let output_belt2 = self
+            .cmds
+            .spawn()
+            .insert(ConveyorBelt::new(25, output_belt2))
             .id();
 
         let mut e_cmds = self.cmds.spawn();
@@ -61,7 +71,8 @@ impl<'w, 's> Spawn<'w, 's> {
         let entities = Entities {
             building,
             input_belt,
-            output_belt,
+            output_belt1,
+            output_belt2,
             model,
         };
 
@@ -74,7 +85,7 @@ impl<'w, 's> Spawn<'w, 's> {
                 Destructable,
                 FocusObject::new(),
             ))
-            .push_children(&[model, input_belt, output_belt]);
+            .push_children(&[model, input_belt, output_belt1, output_belt2]);
 
         entities
     }
@@ -142,17 +153,23 @@ fn init_resource(
 
 fn transform_items(
     mut belts: Query<&mut ConveyorBelt>,
-    transformers: Query<(&Transformer, &Entities)>,
+    mut transformers: Query<(&mut Transformer, &Entities)>,
 ) {
-    for (_transformer, entities) in transformers.iter() {
+    for (mut transformer, entities) in transformers.iter_mut() {
         let things = belts
             .get_mut(entities.input_belt)
             .map(|mut belt| belt.drain_items_after_pos(10));
 
         if let Ok(things) = things {
             if !things.is_empty() {
-                if let Ok(mut belt) = belts.get_mut(entities.output_belt) {
-                    for thing in things {
+                for thing in things {
+                    transformer.output = (transformer.output + 1) % 2;
+                    let output = match transformer.output {
+                        0 => entities.output_belt1,
+                        _ => entities.output_belt2,
+                    };
+
+                    if let Ok(mut belt) = belts.get_mut(output) {
                         belt.force_insert_thing(thing, 0);
                     }
                 }
