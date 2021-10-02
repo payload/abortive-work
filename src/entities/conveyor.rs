@@ -4,7 +4,10 @@ use bevy::{ecs::system::SystemParam, prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::DebugLines;
 use lyon::geom::CubicBezierSegment;
 
-use crate::{extensions::{QueryExt, ToPoint, ToVec3}, systems::{DebugConfig, Destructable, FocusObject, Thing, curve}};
+use crate::{
+    extensions::{QueryExt, ToPoint, ToVec3},
+    systems::{curve, DebugConfig, Destructable, FocusObject, Thing},
+};
 
 use super::NotGround;
 
@@ -169,8 +172,6 @@ fn spawn_chains(
     debug_config: Res<DebugConfig>,
 ) {
     for (chain_def_entity, def, chain) in chain_defs.iter() {
-        println!("spawn_chain");
-
         let (begin_mid, begin) = match def.from {
             ChainLink::Entity(e) => {
                 if let Ok(belt) = belts.get(e) {
@@ -268,39 +269,51 @@ fn spawn_chains(
             belt_defs.push(control_defs.first().unwrap().clone());
 
             for window in control_defs.windows(2) {
-                let begin_def = window[0];
-                let end_def = window[1];
-                let BeltDef(_, begin_mid, begin_end) = begin_def.clone();
-                let BeltDef(end_begin, end_mid, _) = end_def.clone();
+                let BeltDef(_, begin_mid, begin_end) = window[0].clone();
+                let BeltDef(end_begin, end_mid, _) = window[1].clone();
 
-                let difference = end_mid - begin_mid;
-                let forward = difference.normalize();
-                let half_step = 0.5 * forward;
+                let way = end_begin - begin_end;
+                let distance = way.length();
+                let one_step = (end_mid - begin_mid).normalize();
 
-                let distance = (end_begin - begin_end).length();
-                let short_distance = distance.floor();
-                let steps = short_distance as usize;
+                if distance < 0.0001 {
+                    // both control points are next to each other
+                    continue;
+                }
 
                 let mut begin = begin_end;
-                let mut mid = begin_mid + forward;
-                // TODO here could be an off by one error
-                for step in 0..steps {
-                    let end = if step < steps || distance - short_distance > 0.05 {
-                        mid + half_step
-                    } else {
-                        println!("shorten {}", distance - short_distance);
-                        mid + 0.5 * half_step
-                    };
+                let mut mid_before = begin_mid;
+                let mut remaining_distance = distance;
+                while remaining_distance >= 1.4 {
+                    // create belt length = 1.0
+                    let end = begin + one_step;
+                    let mid = mid_before + one_step;
                     belt_defs.push(BeltDef(begin, mid, end));
-                    mid += forward;
+                    remaining_distance -= 1.0;
                     begin = end;
+                    mid_before = mid;
                 }
 
-                if distance - short_distance > 0.0 {
-                    belt_defs.push(BeltDef(begin, 0.5 * (begin + end_begin), end_begin));
+                if remaining_distance >= 1.0 {
+                    // create two belts length = remaining_distance / 2
+                    let short_step = one_step * remaining_distance * 0.5;
+                    let end = begin + short_step;
+                    let mid = mid_before + short_step;
+                    belt_defs.push(BeltDef(begin, mid, end));
+                    belt_defs.push(BeltDef(
+                        begin + short_step,
+                        mid + short_step,
+                        end + short_step,
+                    ));
+                } else {
+                    // create belt length = remaining_distance
+                    let short_step = one_step * remaining_distance;
+                    let end = begin + short_step;
+                    let mid = mid_before + short_step;
+                    belt_defs.push(BeltDef(begin, mid, end));
                 }
 
-                belt_defs.push(end_def);
+                belt_defs.push(window[1]);
             }
         }
 
@@ -325,7 +338,7 @@ fn spawn_chains(
             debug_belt_defs(
                 &mut debug,
                 &defs.iter().map(|(_, def)| def).copied().collect::<Vec<_>>(),
-                debug_config.spawn_chains_belt_def_duration
+                debug_config.spawn_chains_belt_def_duration,
             );
         }
 
@@ -356,7 +369,7 @@ fn spawn_chains(
                 },
                 Transform {
                     rotation: Quat::IDENTITY,
-                    translation: def.1,
+                    translation: Vec3::new(def.1.x, 0.1, def.1.z),
                     scale: Vec3::ONE,
                 },
                 GlobalTransform::identity(),

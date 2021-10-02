@@ -169,15 +169,9 @@ fn spawn_level_1(
 
     conveyor.spawn_chain_over(
         ChainLink::Pos(pos(1, -1)),
-        ChainLink::Pos(pos(0, -8)),
-        &[pos(1, -4)],
+        ChainLink::Entity(dump1),
+        &[center + Vec3::new(1.0, 0.0, -4.0), pos(2, -9), pos(-3, -7)],
     );
-
-    // conveyor.spawn_chain_over(
-    //     ChainLink::Pos(pos(1, -1)),
-    //     ChainLink::Entity(dump1),
-    //     &[center + Vec3::new(1.0, 0.0, -4.0), pos(2, -9), pos(-3, -7)],
-    // );
 }
 
 fn once(mut has_run: Local<bool>) -> ShouldRun {
