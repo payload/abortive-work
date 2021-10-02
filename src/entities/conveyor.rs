@@ -672,7 +672,7 @@ fn convey_items(
             };
 
             if belt.items.len() > 0 {
-                let next_belt = belt.output.map(|e| belts.get(e).unwrap());
+                let next_belt = belt.output.and_then(|e| belts.get(e).ok());
 
                 if let Some(next_belt) = next_belt {
                     let next_belt_left = next_belt.left();
