@@ -25,7 +25,7 @@ pub struct ConveyorBelt {
     pub marked_for_thing: Option<Thing>,
     items: Vec<Item>,
     length: i32,
-    output: Option<Entity>,
+    pub output: Option<Entity>,
     pub def: BeltDef,
 }
 
@@ -66,14 +66,30 @@ impl ConveyorBelt {
         }
     }
 
-    pub fn drain_items_after_pos(&mut self, min_pos: i32) {
+    pub fn force_insert_thing(&mut self, thing: Thing, pos: i32) {
+        let item = Item {
+            thing,
+            amount: 1.0,
+            size: 25,
+            pos,
+        };
+        if let Some(index) = self.items.iter().position(|item| item.pos >= pos) {
+            self.items.insert(index, item);
+        } else {
+            self.items.push(item);
+        }
+    }
+
+    pub fn drain_items_after_pos(&mut self, min_pos: i32) -> Vec<Thing> {
         if let Some((index, _)) = self
             .items
             .iter()
             .enumerate()
             .find(|(_, item)| item.pos + item.size / 2 >= min_pos)
         {
-            self.items.drain(index..);
+            self.items.drain(index..).rev().map(|i| i.thing).collect()
+        } else {
+            Vec::new()
         }
     }
 }

@@ -7,11 +7,7 @@ use bevy::{
 use super::{BeltDef, ConveyorBelt};
 
 #[derive(Default)]
-pub struct Generator {
-    next_item_time: f64,
-    time_for_item: f64,
-    thing: Option<Thing>,
-}
+pub struct Transformer {}
 
 pub struct Model;
 pub struct Plugin;
@@ -19,17 +15,13 @@ pub struct Plugin;
 impl bevy::prelude::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource)
-            .add_system(generate_items);
+            .add_system(transform_items);
     }
 }
 
-impl Generator {
-    pub fn new(thing: Thing, time_for_item: f64) -> Self {
-        Self {
-            time_for_item,
-            thing: Some(thing),
-            ..Self::default()
-        }
+impl Transformer {
+    pub fn new() -> Self {
+        Self { ..Self::default() }
     }
 }
 
@@ -42,7 +34,7 @@ pub struct Spawn<'w, 's> {
 impl<'w, 's> Spawn<'w, 's> {
     pub fn spawn<'a>(
         &'a mut self,
-        component: Generator,
+        component: Transformer,
         transform: Transform,
     ) -> EntityCommands<'w, 's, 'a> {
         let hole = self
@@ -69,13 +61,13 @@ impl<'w, 's> Spawn<'w, 's> {
 
         let pos = transform.translation;
         let z = transform.rotation.mul_vec3(Vec3::Z);
-        let start = pos;
+        let start = pos + 0.5 * z;
         let mid = pos;
-        let end = pos + 0.5 * z;
+        let end = pos - 0.5 * z;
         let mut e_cmds = self.cmds.spawn_bundle((
             component,
             transform,
-            ConveyorBelt::new(50, BeltDef(start, mid, end)),
+            ConveyorBelt::new(100, BeltDef(start, mid, end)),
             GlobalTransform::identity(),
             Destructable,
             FocusObject::new(),
@@ -104,14 +96,14 @@ fn init_resource(
         transform: Transform::from_xyz(0.0, 0.1, 0.0),
         hole_transform: Transform::from_xyz(0.0, 0.102, 0.1),
         material: materials.add(StandardMaterial {
-            base_color: Color::INDIGO,
+            base_color: Color::GOLD,
             reflectance: 0.0,
             roughness: 1.0,
             metallic: 0.0,
             ..Default::default()
         }),
         hole_material: materials.add(StandardMaterial {
-            base_color: Color::NAVY,
+            base_color: Color::YELLOW,
             reflectance: 0.0,
             roughness: 1.0,
             metallic: 0.0,
@@ -122,13 +114,11 @@ fn init_resource(
     });
 }
 
-fn generate_items(time: Res<Time>, mut generators: Query<(&mut ConveyorBelt, &mut Generator)>) {
-    for (mut belt, mut generator) in generators.iter_mut() {
-        if time.seconds_since_startup() >= generator.next_item_time {
-            if let Some(thing) = generator.thing {
-                generator.next_item_time = time.seconds_since_startup() + generator.time_for_item;
-                belt.put_thing(thing);
-            }
+fn transform_items(mut transformers: Query<(&mut ConveyorBelt, &mut Transformer)>) {
+    for (mut belt, _transformer) in transformers.iter_mut() {
+        let things = belt.drain_items_after_pos(45);
+        for thing in things {
+            belt.force_insert_thing(thing, 100);
         }
     }
 }

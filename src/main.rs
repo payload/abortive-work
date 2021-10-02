@@ -14,7 +14,9 @@ use systems::*;
 
 mod extensions;
 
-use crate::entities::{dump::Dump, generator::Generator, ritual_site::RitualSite};
+use crate::entities::{
+    dump::Dump, generator::Generator, ritual_site::RitualSite, transformer::Transformer,
+};
 
 fn main() {
     App::new()
@@ -68,6 +70,7 @@ fn spawn_level_1(
     mut ritual_sites: ritual_site::Spawn,
     mut dump: dump::Spawn,
     mut generator: generator::Spawn,
+    mut transformer: transformer::Spawn,
 ) {
     use BoulderMaterial::*;
 
@@ -155,7 +158,7 @@ fn spawn_level_1(
     let dump1 = dump
         .spawn(
             Dump::new(),
-            at(-5, -3).with_rotation(Quat::from_rotation_y(125.0f32.to_radians())),
+            at(-9, -3).with_rotation(Quat::from_rotation_y(95.0f32.to_radians())),
         )
         .id();
 
@@ -166,12 +169,22 @@ fn spawn_level_1(
         )
         .id();
 
-    conveyor.spawn_chain(ChainLink::Pos(pos(-4, -7)), ChainLink::Pos(pos(-4, -10)));
+    let transformer1 = transformer
+        .spawn(
+            Transformer::new(),
+            at(-5, -3).with_rotation(Quat::from_rotation_y(125.0f32.to_radians())),
+        )
+        .id();
+
     conveyor.spawn_chain_over(
         ChainLink::Entity(generator1),
-        ChainLink::Entity(dump1),
+        ChainLink::Entity(transformer1),
         &[center + Vec3::new(1.0, 0.0, -4.0), pos(2, -9), pos(-3, -7)],
     );
+    conveyor.spawn_chain(ChainLink::Entity(transformer1), ChainLink::Entity(dump1));
+
+    // to prevent unused ChainLink::Pos
+    conveyor.spawn_chain(ChainLink::Pos(pos(-30, -30)), ChainLink::Pos(pos(-40, -30)));
 }
 
 fn once(mut has_run: Local<bool>) -> ShouldRun {
