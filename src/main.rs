@@ -1,5 +1,3 @@
-use std::f32::consts::TAU;
-
 use bevy::{ecs::schedule::ShouldRun, prelude::*};
 
 mod entities;
@@ -16,7 +14,7 @@ use systems::*;
 
 mod extensions;
 
-use crate::entities::{dump::Dump, ritual_site::RitualSite};
+use crate::entities::{dump::Dump, generator::Generator, ritual_site::RitualSite};
 
 fn main() {
     App::new()
@@ -69,6 +67,7 @@ fn spawn_level_1(
     mut trees: tree::Spawn,
     mut ritual_sites: ritual_site::Spawn,
     mut dump: dump::Spawn,
+    mut generator: generator::Spawn,
 ) {
     use BoulderMaterial::*;
 
@@ -156,17 +155,20 @@ fn spawn_level_1(
     let dump1 = dump
         .spawn(
             Dump::new(),
-            Transform {
-                rotation: Quat::from_rotation_y(-0.28 * TAU),
-                translation: center + Vec3::new(-3.5, 0.0, -3.0),
-                ..Default::default()
-            },
+            at(-5, -3).with_rotation(Quat::from_rotation_y(125.0f32.to_radians())),
         )
         .id();
 
-    conveyor.spawn_chain(ChainLink::Pos(pos(-4, -7)), ChainLink::Pos(pos(-4, -3)));
+    let generator1 = generator
+        .spawn(
+            Generator::new(Thing::Gold, 0.7),
+            at(0, -1).with_rotation(Quat::from_rotation_y(90.0f32.to_radians())),
+        )
+        .id();
+
+    conveyor.spawn_chain(ChainLink::Pos(pos(-4, -7)), ChainLink::Pos(pos(-4, -10)));
     conveyor.spawn_chain_over(
-        ChainLink::Pos(pos(1, -1)),
+        ChainLink::Entity(generator1),
         ChainLink::Entity(dump1),
         &[center + Vec3::new(1.0, 0.0, -4.0), pos(2, -9), pos(-3, -7)],
     );

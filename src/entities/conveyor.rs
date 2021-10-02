@@ -134,6 +134,15 @@ pub enum ChainLink {
     Pos(Vec3),
 }
 
+impl ChainLink {
+    fn entity(&self) -> Option<Entity> {
+        match self {
+            ChainLink::Entity(e) => Some(*e),
+            ChainLink::Pos(_) => None,
+        }
+    }
+}
+
 fn debug_spawn_chains(input: Res<Input<KeyCode>>, mut chain_defs: Query<&mut ChainDef>) {
     if !input.just_pressed(KeyCode::Space) {
         return;
@@ -148,7 +157,7 @@ fn debug_spawn_chains(input: Res<Input<KeyCode>>, mut chain_defs: Query<&mut Cha
 }
 
 fn spawn_chains(
-    belts: Query<&ConveyorBelt>,
+    mut belts: Query<&mut ConveyorBelt>,
     chain_defs: Query<(Entity, &ChainDef, Option<&ConveyorChain>), Changed<ChainDef>>,
     mut cmds: Commands,
     mut debug: ResMut<DebugLines>,
@@ -159,7 +168,7 @@ fn spawn_chains(
     for (chain_def_entity, def, chain) in chain_defs.iter() {
         let (begin_mid, begin) = match def.from {
             ChainLink::Entity(e) => {
-                if let Ok(belt) = belts.get(e) {
+                if let Ok(belt) = belts.get_mut(e) {
                     let BeltDef(_, mid, begin) = belt.def;
                     (2.0 * begin - mid, Some(begin))
                 } else {
@@ -171,7 +180,7 @@ fn spawn_chains(
 
         let (end_mid, end) = match def.to {
             ChainLink::Entity(e) => {
-                if let Ok(belt) = belts.get(e) {
+                if let Ok(belt) = belts.get_mut(e) {
                     let BeltDef(end, mid, _) = belt.def;
                     (2.0 * end - mid, Some(end))
                 } else {
@@ -304,10 +313,7 @@ fn spawn_chains(
 
         // belt_defs -> spawn
 
-        let defs: Vec<_> = belt_defs
-            .into_iter()
-            .map(|def| (cmds.spawn().id(), def))
-            .collect();
+        let belt_entities: Vec<_> = belt_defs.iter().map(|_| cmds.spawn().id()).collect();
 
         if let Some(chain) = chain {
             for belt in chain.belts.iter() {
@@ -316,25 +322,26 @@ fn spawn_chains(
         }
 
         cmds.entity(chain_def_entity).insert(ConveyorChain {
-            belts: defs.iter().map(|p| p.0).collect(),
+            from: def.from.entity(),
+            to: def.to.entity(),
+            belts: belt_entities.clone(),
         });
+
+        if let Some(mut belt) = def.from.entity().and_then(|e| belts.get_mut(e).ok()) {
+            belt.output = belt_entities.first().cloned();
+        }
 
         if debug_config.spawn_chains_belt_def_duration > 0.0 {
             debug_belt_defs(
                 &mut debug,
-                &defs.iter().map(|(_, def)| def).copied().collect::<Vec<_>>(),
+                &belt_defs,
                 debug_config.spawn_chains_belt_def_duration,
             );
         }
 
-        let mut output = if let ChainLink::Entity(e) = def.to {
-            Some(e)
-        } else {
-            None
-        };
-
+        let mut output = def.to.entity();
         let mut flip = false;
-        for (entity, def) in defs.into_iter().rev() {
+        for (entity, def) in belt_entities.into_iter().zip(belt_defs.into_iter()).rev() {
             let model = cmds
                 .spawn_bundle(PbrBundle {
                     material: assets.material.clone(),
@@ -354,7 +361,7 @@ fn spawn_chains(
                 },
                 Transform {
                     rotation: Quat::IDENTITY,
-                    translation: Vec3::new(def.1.x, 0.1, def.1.z),
+                    translation: Vec3::new(def.1.x, 0.05, def.1.z),
                     scale: Vec3::ONE,
                 },
                 GlobalTransform::identity(),
@@ -408,6 +415,8 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
         }
 
         self.cmds.spawn().insert(ConveyorChain {
+            from: None,
+            to: None,
             belts: line.iter().map(|p| p.0).collect(),
         });
 
@@ -580,6 +589,8 @@ fn update_ghostchains(
 }
 
 struct ConveyorChain {
+    from: Option<Entity>,
+    to: Option<Entity>,
     belts: Vec<Entity>,
 }
 
@@ -630,9 +641,20 @@ fn convey_items(
     mut query_belts: QuerySet<(QueryState<&mut ConveyorBelt>, QueryState<&ConveyorBelt>)>,
 ) {
     for chain in chains.iter() {
-        for belt_entity in chain.belts.iter().rev().copied() {
+        for belt_entity in chain
+            .to
+            .iter()
+            .chain(chain.belts.iter().rev())
+            .chain(chain.from.iter())
+            .copied()
+        {
             let belts = query_belts.q1();
-            let belt = belts.get(belt_entity).unwrap();
+            let belt = if let Ok(belt) = belts.get(belt_entity) {
+                belt
+            } else {
+                continue;
+            };
+
             if belt.items.len() > 0 {
                 let next_belt = belt.output.map(|e| belts.get(e).unwrap());
 
