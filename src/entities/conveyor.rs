@@ -4,10 +4,7 @@ use bevy::{ecs::system::SystemParam, prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::DebugLines;
 use lyon::geom::CubicBezierSegment;
 
-use crate::{
-    extensions::{QueryExt, ToPoint, ToVec3},
-    systems::{curve, Destructable, FocusObject, Thing},
-};
+use crate::{extensions::{QueryExt, ToPoint, ToVec3}, systems::{DebugConfig, Destructable, FocusObject, Thing, curve}};
 
 use super::NotGround;
 
@@ -86,7 +83,8 @@ impl Plugin for ConveyorPlugin {
             .add_system_to_stage(CoreStage::Update, update_ghostchains)
             .add_system_to_stage(CoreStage::PreUpdate, convey_items)
             .add_system_to_stage(CoreStage::PostUpdate, debug_items)
-            .add_system(spawn_chains);
+            .add_system(spawn_chains)
+            .add_system(debug_spawn_chains);
     }
 }
 
@@ -129,11 +127,11 @@ fn debug_vec3_strip(debug: &mut DebugLines, chain: &[Vec3]) {
     }
 }
 
-fn debug_belt_defs(debug: &mut DebugLines, defs: &[BeltDef]) {
+fn debug_belt_defs(debug: &mut DebugLines, defs: &[BeltDef], duration: f32) {
     for (i, BeltDef(a, m, b)) in defs.iter().copied().enumerate() {
         let color = if i % 2 == 0 { Color::WHITE } else { Color::RED };
-        debug.line_colored(a, m, 10.0, color);
-        debug.line_colored(m, b, 10.0, color);
+        debug.line_colored(a, m, duration, color);
+        debug.line_colored(m, b, duration, color);
     }
 }
 
@@ -148,15 +146,31 @@ pub enum ChainLink {
     Pos(Vec3),
 }
 
+fn debug_spawn_chains(input: Res<Input<KeyCode>>, mut chain_defs: Query<&mut ChainDef>) {
+    if !input.just_pressed(KeyCode::Space) {
+        return;
+    }
+
+    for mut def in chain_defs.iter_mut() {
+        for pt in def.over.iter_mut() {
+            let r = || 0.5 - fastrand::f32();
+            *pt += Vec3::new(r(), 0.0, r());
+        }
+    }
+}
+
 fn spawn_chains(
     belts: Query<&ConveyorBelt>,
-    chain_defs: Query<(Entity, &ChainDef)>,
+    chain_defs: Query<(Entity, &ChainDef, Option<&ConveyorChain>), Changed<ChainDef>>,
     mut cmds: Commands,
     mut debug: ResMut<DebugLines>,
     assets: Res<ConveyorAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
+    debug_config: Res<DebugConfig>,
 ) {
-    for (chain_def_entity, def) in chain_defs.iter() {
+    for (chain_def_entity, def, chain) in chain_defs.iter() {
+        println!("spawn_chain");
+
         let (begin_mid, begin) = match def.from {
             ChainLink::Entity(e) => {
                 if let Ok(belt) = belts.get(e) {
@@ -271,10 +285,11 @@ fn spawn_chains(
                 let mut mid = begin_mid + forward;
                 // TODO here could be an off by one error
                 for step in 0..steps {
-                    let end = if step < steps - 1 || distance - short_distance > 0.4 {
+                    let end = if step < steps || distance - short_distance > 0.05 {
                         mid + half_step
                     } else {
-                        mid + (distance - short_distance) * half_step
+                        println!("shorten {}", distance - short_distance);
+                        mid + 0.5 * half_step
                     };
                     belt_defs.push(BeltDef(begin, mid, end));
                     mid += forward;
@@ -296,14 +311,23 @@ fn spawn_chains(
             .map(|def| (cmds.spawn().id(), def))
             .collect();
 
-        cmds.spawn().insert(ConveyorChain {
+        if let Some(chain) = chain {
+            for belt in chain.belts.iter() {
+                cmds.entity(*belt).despawn_recursive();
+            }
+        }
+
+        cmds.entity(chain_def_entity).insert(ConveyorChain {
             belts: defs.iter().map(|p| p.0).collect(),
         });
 
-        debug_belt_defs(
-            &mut debug,
-            &defs.iter().map(|(_, def)| def).copied().collect::<Vec<_>>(),
-        );
+        if debug_config.spawn_chains_belt_def_duration > 0.0 {
+            debug_belt_defs(
+                &mut debug,
+                &defs.iter().map(|(_, def)| def).copied().collect::<Vec<_>>(),
+                debug_config.spawn_chains_belt_def_duration
+            );
+        }
 
         let mut output = if let ChainLink::Entity(e) = def.to {
             Some(e)
@@ -341,8 +365,6 @@ fn spawn_chains(
             ));
             output = Some(entity);
         }
-
-        cmds.entity(chain_def_entity).despawn();
     }
 }
 
@@ -492,11 +514,6 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
         self.cmds.spawn().insert(ConveyorChain {
             belts: defs.iter().map(|p| p.0).chain(output.into_iter()).collect(),
         });
-
-        debug_belt_defs(
-            &mut self.debug,
-            &defs.iter().map(|(_, def)| def).copied().collect::<Vec<_>>(),
-        );
 
         let mut output = output;
         for (entity, def) in defs.into_iter().rev() {
