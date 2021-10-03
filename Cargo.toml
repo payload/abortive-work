@@ -18,7 +18,7 @@ big-brain = {git = "https://github.com/payload/big-brain.git"}
 bevy_prototype_debug_lines = {git = "https://github.com/payload/bevy_debug_lines.git"}
 
 [patch.'https://github.com/bevyengine/bevy']
-bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "51a5070c"}
+bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "5ba2b9adcf5e686273cf024acf1ad8ddfb4f8e18"}
 
 [patch.'crates-io']
-bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "51a5070c"}
+bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "5ba2b9adcf5e686273cf024acf1ad8ddfb4f8e18"}
