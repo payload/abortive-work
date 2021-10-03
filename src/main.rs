@@ -152,7 +152,7 @@ fn spawn_level_1(
     pile.spawn(Pile::new(Thing::Iron, 10.0), at(0, 1));
     ritual_sites.spawn(
         RitualSite::new(&[(Thing::Iron, 300), (Thing::Gold, 300)]),
-        at(-7, -3),
+        at(-7, -6),
     );
 
     let dump1 = dump
