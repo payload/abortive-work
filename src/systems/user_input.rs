@@ -83,13 +83,13 @@ impl Default for UiState {
 
 impl Default for UiMode {
     fn default() -> Self {
-        Self::None
+        Self::BuildTool
     }
 }
 
 impl Default for Build {
     fn default() -> Self {
-        Build::Boulder
+        Build::Conveyor
     }
 }
 
@@ -228,12 +228,10 @@ fn update_player(
                 }
                 Build::Conveyor => {
                     if input.just_pressed(KeyCode::E) {
-                        let line = conveyor.ghostline_from_point_to_entity(
-                            mage_transform.translation,
-                            mage_entity,
-                        );
+                        let ghost =
+                            conveyor.spawn_dynamic_ghost(mage_transform.translation, mage_entity);
                         state.build_tool_state.start_line =
-                            Some((line, mage_transform.translation));
+                            Some((ghost, mage_transform.translation));
                         state.mode = UiMode::BuildConveyorTool;
                     }
                 }
@@ -252,9 +250,8 @@ fn update_player(
                 }
                 state.mode = UiMode::BuildTool;
             } else if input.just_pressed(KeyCode::E) {
-                if let Some((line, from)) = state.build_tool_state.start_line {
-                    cmds.entity(line).despawn_recursive();
-                    conveyor.spawn_line(from, mage_transform.translation);
+                if let Some((ghost, _from)) = state.build_tool_state.start_line {
+                    conveyor.manifest_ghost(ghost);
                     state.build_tool_state.start_line = None;
                 }
                 state.mode = UiMode::BuildTool;

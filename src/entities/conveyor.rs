@@ -99,19 +99,18 @@ pub struct ConveyorPlugin;
 impl Plugin for ConveyorPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
-            .add_system_to_stage(CoreStage::Update, update_ghostchains)
             .add_system_to_stage(CoreStage::PreUpdate, convey_items)
             .add_system_to_stage(CoreStage::PostUpdate, debug_items)
-            .add_system(spawn_chains)
-            .add_system(debug_spawn_chains);
+            .add_system_to_stage(CoreStage::PreUpdate, spawn_chains)
+            .add_system(debug_spawn_chains)
+            .add_system(manage_dynamic_ghosts);
     }
 }
 
 #[derive(SystemParam)]
 pub struct ConveyorSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
-    assets: Res<'w, ConveyorAssets>,
-    belts: Query<'w, 's, (&'static Transform, &'static ConveyorBelt)>,
+    ghosts: Query<'w, 's, &'static mut DynamicGhost>,
 }
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -139,12 +138,14 @@ fn debug_belt_defs(debug: &mut DebugLines, defs: &[BeltDef], duration: f32) {
     }
 }
 
-struct ChainDef {
+#[derive(Debug)]
+pub struct ChainDef {
     from: ChainLink,
     to: ChainLink,
     over: Vec<Vec3>,
 }
 
+#[derive(Debug)]
 pub enum ChainLink {
     Entity(Entity),
     Pos(Vec3),
@@ -172,34 +173,118 @@ fn debug_spawn_chains(input: Res<Input<KeyCode>>, mut chain_defs: Query<&mut Cha
     }
 }
 
+pub struct DynamicGhost {
+    from: Vec3,
+    to: Entity,
+    manifest: bool,
+}
+
+fn manage_dynamic_ghosts(
+    mut frame: Local<usize>,
+    mut chain_defs: Query<&mut ChainDef>,
+    ghosts: Query<(Entity, &DynamicGhost), With<ChainDef>>,
+    belts: Query<(Entity, &Transform, &ConveyorBelt)>,
+    transforms: Query<&Transform>,
+    mut cmds: Commands,
+) {
+    *frame += 1;
+    if *frame < 2 {
+        return;
+    }
+    *frame = 0;
+
+    for (ghost_entity, ghost) in ghosts.iter() {
+        let mut def = chain_defs.get_mut(ghost_entity).unwrap();
+
+        if let Ok((e, _)) = snap_to_belt(&belts, ghost.from) {
+            def.from = ChainLink::Entity(e);
+        } else {
+            def.from = ChainLink::Pos(ghost.from);
+        }
+
+        if let Ok(to) = transforms.get(ghost.to) {
+            if let Ok((e, _)) = snap_to_belt(&belts, to.translation) {
+                def.to = ChainLink::Entity(e);
+            } else {
+                def.to = ChainLink::Pos(to.translation);
+            }
+        } else {
+            eprintln!("Try to conveyor ghost to an entity without Transform.");
+        }
+
+        if ghost.manifest {
+            def.set_changed();
+            cmds.entity(ghost_entity).remove::<DynamicGhost>();
+        }
+    }
+
+    fn snap_to_belt(
+        belts: &Query<(Entity, &Transform, &ConveyorBelt)>,
+        from: Vec3,
+    ) -> Result<(Entity, BeltDef), Vec3> {
+        belts
+            .iter()
+            .map(|(e, _, belt)| (e, belt.def, belt.def.2.distance_squared(from)))
+            .filter(|(_, _, d)| *d < 1.0)
+            .min_by(|(_, _, a), (_, _, b)| {
+                if a < b {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            })
+            .map(|(e, def, _)| Ok((e, def)))
+            .unwrap_or(Err(from))
+    }
+}
+
 fn spawn_chains(
     mut belts: Query<&mut ConveyorBelt>,
-    chain_defs: Query<(Entity, &ChainDef, Option<&ConveyorChain>), Changed<ChainDef>>,
+    transforms: Query<&Transform>,
+    chain_defs: Query<
+        (
+            Entity,
+            &ChainDef,
+            Option<&ConveyorChain>,
+            Option<&DynamicGhost>,
+        ),
+        Changed<ChainDef>,
+    >,
     mut cmds: Commands,
     mut debug: ResMut<DebugLines>,
     assets: Res<ConveyorAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     debug_config: Res<DebugConfig>,
 ) {
-    for (chain_def_entity, def, chain) in chain_defs.iter() {
-        let (begin_mid, begin) = match def.from {
+    for (chain_def_entity, chain_def, chain, ghost) in chain_defs.iter() {
+        let (begin_mid, begin) = match chain_def.from {
             ChainLink::Entity(e) => {
                 if let Ok(belt) = belts.get_mut(e) {
                     let BeltDef(_, mid, begin) = belt.def;
                     (2.0 * begin - mid, Some(begin))
+                } else if let Some(transform) =
+                    chain_def.from.entity().and_then(|e| transforms.get(e).ok())
+                {
+                    (transform.translation, None)
                 } else {
+                    eprintln!("spawn_chains from entity does not match");
                     continue;
                 }
             }
             ChainLink::Pos(mid) => (mid, None),
         };
 
-        let (end_mid, end) = match def.to {
+        let (end_mid, end) = match chain_def.to {
             ChainLink::Entity(e) => {
                 if let Ok(belt) = belts.get_mut(e) {
                     let BeltDef(end, mid, _) = belt.def;
                     (2.0 * end - mid, Some(end))
+                } else if let Some(transform) =
+                    chain_def.to.entity().and_then(|e| transforms.get(e).ok())
+                {
+                    (transform.translation, None)
                 } else {
+                    eprintln!("spawn_chains to entity does not match");
                     continue;
                 }
             }
@@ -225,7 +310,7 @@ fn spawn_chains(
                     0.5 * (end_mid - mid).normalize(),
                 ),
             });
-        } else if def.over.is_empty() {
+        } else if chain_def.over.is_empty() {
             // no intermediate points
             let half_step = 0.5 * (end_mid - begin_mid).normalize();
             let begin = begin.unwrap_or_else(|| begin_mid - half_step);
@@ -233,8 +318,8 @@ fn spawn_chains(
             control_defs.push(BeltDef(begin, begin_mid, begin_mid + half_step));
             control_defs.push(BeltDef(end_mid - half_step, end_mid, end));
         } else {
-            let first_over = def.over.first().unwrap().clone();
-            let last_over = def.over.last().unwrap().clone();
+            let first_over = chain_def.over.first().unwrap().clone();
+            let last_over = chain_def.over.last().unwrap().clone();
 
             let step_forward = 0.5 * (first_over - begin_mid).normalize();
             let begin_begin = begin.unwrap_or_else(|| begin_mid - step_forward);
@@ -248,14 +333,14 @@ fn spawn_chains(
             let end_def = BeltDef(end_begin, end_mid, end_end);
             control_defs.push(begin_def);
 
-            let len = def.over.len();
+            let len = chain_def.over.len();
             let mut mid_before = begin_mid;
             for index in 0..len {
-                let mid = def.over[index];
+                let mid = chain_def.over[index];
                 let next_mid = if index == len - 1 {
                     end_mid
                 } else {
-                    def.over[index + 1]
+                    chain_def.over[index + 1]
                 };
 
                 control_defs.push(BeltDef(
@@ -337,13 +422,17 @@ fn spawn_chains(
             }
         }
 
-        cmds.entity(chain_def_entity).insert(ConveyorChain {
-            from: def.from.entity(),
-            to: def.to.entity(),
-            belts: belt_entities.clone(),
-        });
+        cmds.entity(chain_def_entity)
+            .insert(ConveyorChain {
+                from: chain_def.from.entity(),
+                to: chain_def.to.entity(),
+                belts: belt_entities.clone(),
+            })
+            .insert(Transform::identity())
+            .insert(GlobalTransform::identity())
+            .push_children(&belt_entities);
 
-        if let Some(mut belt) = def.from.entity().and_then(|e| belts.get_mut(e).ok()) {
+        if let Some(mut belt) = chain_def.from.entity().and_then(|e| belts.get_mut(e).ok()) {
             belt.output = belt_entities.first().cloned();
         }
 
@@ -355,12 +444,19 @@ fn spawn_chains(
             );
         }
 
-        let mut output = def.to.entity();
+        let mut output = chain_def.to.entity();
         let mut flip = false;
         for (entity, def) in belt_entities.into_iter().zip(belt_defs.into_iter()).rev() {
+            flip = !flip;
+
+            let material = match ghost.is_some() {
+                true => assets.ghost_material.clone(),
+                false => assets.material.clone(),
+            };
+
             let model = cmds
                 .spawn_bundle(PbrBundle {
-                    material: assets.material.clone(),
+                    material,
                     mesh: meshes.add(curve(def.0, def.1, def.2, if flip { 0.8 } else { 0.7 })),
                     transform: Transform::from_xyz(0.0, 0.1, 0.0),
                     ..Default::default()
@@ -368,22 +464,25 @@ fn spawn_chains(
                 .insert(NotGround)
                 .id();
 
-            flip = !flip;
+            let transform = Transform::from_xyz(def.1.x, 0.05, def.1.z);
 
-            cmds.entity(entity).push_children(&[model]).insert_bundle((
-                ConveyorBelt {
-                    output,
-                    ..ConveyorBelt::new((def.2.distance(def.0) * 100.0).floor() as i32, def)
-                },
-                Transform {
-                    rotation: Quat::IDENTITY,
-                    translation: Vec3::new(def.1.x, 0.05, def.1.z),
-                    scale: Vec3::ONE,
-                },
-                GlobalTransform::identity(),
-                Destructable,
-                FocusObject::new(),
-            ));
+            if ghost.is_some() {
+                cmds.entity(entity)
+                    .push_children(&[model])
+                    .insert_bundle((transform, GlobalTransform::identity()));
+            } else {
+                cmds.entity(entity).push_children(&[model]).insert_bundle((
+                    ConveyorBelt {
+                        output,
+                        ..ConveyorBelt::new((def.2.distance(def.0) * 100.0).floor() as i32, def)
+                    },
+                    transform,
+                    GlobalTransform::identity(),
+                    Destructable,
+                    FocusObject::new(),
+                ));
+            }
+
             output = Some(entity);
         }
     }
@@ -406,122 +505,27 @@ impl<'w, 's> ConveyorSpawn<'w, 's> {
         },));
     }
 
-    pub fn spawn_line<'a>(&'a mut self, from: Vec3, to: Vec3) {
-        eprintln!("warning, spawn_line, bad implementation");
-        // let from = self.snap_to_belt(from);
-        // let to = self.snap_to_belt(to);
-
-        let mut line: Vec<_> = Self::iter_steps(from, to)
-            .map(|(pos, angle)| {
-                (
-                    self.cmds.spawn().id(),
-                    ConveyorBelt::new(100, BeltDef::default()),
-                    Transform {
-                        rotation: Quat::from_rotation_y(angle),
-                        translation: pos,
-                        scale: Vec3::ONE,
-                    },
-                )
-            })
-            .collect();
-
-        for index in 0..line.len() - 1 {
-            let next_entity = line[index + 1].0;
-            line[index].1.output = Some(next_entity);
-        }
-
-        self.cmds.spawn().insert(ConveyorChain {
-            from: None,
-            to: None,
-            belts: line.iter().map(|p| p.0).collect(),
-        });
-
-        for (entity, belt, transform) in line {
-            let model = self.model(self.assets.material.clone());
-            self.cmds
-                .entity(entity)
-                .insert_bundle((
-                    belt,
-                    transform,
-                    GlobalTransform::identity(),
-                    Destructable,
-                    FocusObject::new(),
-                ))
-                .push_children(&[model]);
-        }
-    }
-
-    pub fn snap_to_belt(&self, from: Vec3) -> Result<BeltDef, Vec3> {
-        self.belts
-            .iter()
-            .map(|(_, belt)| (belt.def, belt.def.2.distance_squared(from)))
-            .filter(|(_, d)| *d < 1.0)
-            .min_by(|(_, a), (_, b)| {
-                if a < b {
-                    Ordering::Less
-                } else {
-                    Ordering::Greater
-                }
-            })
-            .map(|(def, _)| Ok(def))
-            .unwrap_or(Err(from))
-    }
-
-    pub fn ghostline_from_point_to_entity(&mut self, from: Vec3, to: Entity) -> Entity {
+    pub(crate) fn spawn_dynamic_ghost(&mut self, from: Vec3, to: Entity) -> Entity {
         self.cmds
             .spawn_bundle((
-                GhostchainFromHere { to },
-                Transform::from_translation(from),
-                GlobalTransform::identity(),
-            ))
-            .id()
-    }
-
-    pub fn spawn_ghostline(&mut self, from: Vec3, to: Vec3, parent: Entity) {
-        for (pos, angle) in Self::iter_steps(from, to) {
-            self.spawn_ghost(pos, angle, parent);
-        }
-    }
-
-    fn iter_steps(from: Vec3, to: Vec3) -> impl Iterator<Item = (Vec3, f32)> {
-        let way = to - from;
-        let dir = way.normalize();
-        let angle = dir.x.atan2(dir.z);
-        let steps = way.length().floor() as i32;
-        (0..=steps).map(move |step| {
-            let step = step as f32;
-            let pos = from + dir * step;
-            (pos, angle)
-        })
-    }
-
-    fn spawn_ghost(&mut self, pos: Vec3, angle: f32, parent: Entity) {
-        let model = self.model(self.assets.ghost_material.clone());
-        let ghost = self
-            .cmds
-            .spawn_bundle((
-                GlobalTransform::identity(),
-                Transform {
-                    rotation: Quat::from_rotation_y(angle),
-                    translation: pos,
-                    ..Default::default()
+                ChainDef {
+                    from: ChainLink::Pos(from),
+                    to: ChainLink::Entity(to),
+                    over: Vec::new(),
+                },
+                DynamicGhost {
+                    from,
+                    to,
+                    manifest: false,
                 },
             ))
-            .push_children(&[model])
-            .id();
-        self.cmds.entity(parent).push_children(&[ghost]);
+            .id()
     }
 
-    fn model(&mut self, material: Handle<StandardMaterial>) -> Entity {
-        self.cmds
-            .spawn_bundle(PbrBundle {
-                material,
-                mesh: self.assets.mesh.clone(),
-                transform: self.assets.transform.clone(),
-                ..Default::default()
-            })
-            .insert(NotGround)
-            .id()
+    pub(crate) fn manifest_ghost(&mut self, ghost: Entity) {
+        for mut ghost in self.ghosts.get_mut(ghost) {
+            ghost.manifest = true;
+        }
     }
 }
 
@@ -556,52 +560,6 @@ fn load_assets(
         }),
         mesh: meshes.add(shape::Box::new(0.7, 0.1, 0.95).into()),
     });
-}
-
-struct GhostchainFromHere {
-    to: Entity,
-}
-
-struct GhostchainParent;
-
-fn update_ghostchains(
-    mut frame: Local<usize>,
-    mut cmds: Commands,
-    mut conveyor: ConveyorSpawn,
-    chains: Query<(&Transform, &GhostchainFromHere)>,
-    transforms: Query<&Transform>,
-    parents: Query<Entity, With<GhostchainParent>>,
-) {
-    if *frame < 2 {
-        *frame += 1;
-        return;
-    }
-
-    *frame = 0;
-
-    for parent in parents.iter() {
-        cmds.entity(parent).despawn_recursive();
-    }
-
-    for (from_transform, from_here) in chains.iter() {
-        if let Ok(to_transform) = transforms.get(from_here.to) {
-            let parent = cmds
-                .spawn_bundle((
-                    GhostchainParent,
-                    Transform::identity(),
-                    GlobalTransform::identity(),
-                ))
-                .id();
-
-            let from = conveyor.snap_to_belt(from_transform.translation);
-            let to = conveyor.snap_to_belt(to_transform.translation);
-
-            match (from, to) {
-                (Err(from), Err(to)) => conveyor.spawn_ghostline(from, to, parent),
-                _ => {}
-            }
-        }
-    }
 }
 
 struct ConveyorChain {
