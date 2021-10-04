@@ -130,6 +130,8 @@ fn load_assets(
             shape::Capsule {
                 latitudes: 16,
                 longitudes: 8,
+                radius: 0.2,
+                depth: 0.6,
                 ..Default::default()
             }
             .into(),
