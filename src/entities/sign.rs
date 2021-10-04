@@ -22,10 +22,14 @@ pub struct Spawn<'w, 's> {
 
 impl<'w, 's> Spawn<'w, 's> {
     pub fn spawn(&mut self, thing: Option<Thing>, pos: Vec3) {
+        let mut transform = self.res.transform.clone();
+        transform.rotate(Quat::from_rotation_y(
+            10.0 * (0.5 - fastrand::f32()).to_radians(),
+        ));
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
-                transform: self.res.transform.clone(),
+                transform,
                 material: self.res.material.clone(),
                 mesh: self.res.mesh.clone(),
                 ..Default::default()
