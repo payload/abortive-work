@@ -66,6 +66,7 @@ enum Build {
     Boulder,
     Conveyor,
     Imp,
+    Sign,
 }
 
 impl Default for UiState {
@@ -73,7 +74,7 @@ impl Default for UiState {
         Self {
             mode: Default::default(),
             build_tool_state: BuildToolState {
-                build: Build::Boulder,
+                build: Build::Conveyor,
                 boulder_kind: BoulderMaterial::Stone,
                 start_line: None,
             },
@@ -89,7 +90,7 @@ impl Default for UiMode {
 
 impl Default for Build {
     fn default() -> Self {
-        Build::Conveyor
+        Build::Boulder
     }
 }
 
@@ -135,7 +136,7 @@ impl BackAndForth for BoulderMaterial {
     }
 }
 
-const BUILDS: [Build; 3] = [Build::Boulder, Build::Conveyor, Build::Imp];
+const BUILDS: [Build; 4] = [Build::Boulder, Build::Conveyor, Build::Imp, Build::Sign];
 const BOULDER_MATERIALS: [BoulderMaterial; 4] = [
     BoulderMaterial::Stone,
     BoulderMaterial::Coal,
@@ -168,10 +169,12 @@ fn update_player(
     //
     mut imp: ImpSpawn,
     mut boulder: BoulderSpawn,
+    mut sign: sign::Spawn,
     mut destructor: Destructor,
     mut interact_with_focus: EventWriter<InteractWithFocusEvent>,
 ) {
     let (mage_entity, mage_transform, mut mage, focus) = mage.single_mut();
+    let in_front = mage_transform.translation + mage_transform.rotation.mul_vec3(0.5 * Vec3::Z);
 
     match state.mode {
         UiMode::None => {
@@ -238,6 +241,11 @@ fn update_player(
                 Build::Imp => {
                     if input.just_pressed(KeyCode::E) {
                         imp.spawn(Imp::new(), mage_transform.clone());
+                    }
+                }
+                Build::Sign => {
+                    if input.just_pressed(KeyCode::E) {
+                        sign.spawn(None, in_front);
                     }
                 }
             }
@@ -459,6 +467,9 @@ fn example_ui(
                     }
                     Build::Imp => {
                         ui.label(format!("{:?}. (E) spawn (Q) cancel", Build::Imp));
+                    }
+                    Build::Sign => {
+                        ui.label(format!("{:?}. (E) spawn (Q) cancel", Build::Sign));
                     }
                 },
                 UiMode::DestructTool => {

@@ -33,6 +33,7 @@ pub use conveyor::*;
 pub mod dump;
 pub mod generator;
 pub mod ritual_site;
+pub mod sign;
 pub mod transformer;
 pub mod tree;
 
@@ -56,6 +57,7 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(GroundPlugin)
             .add_plugin(dump::Plugin)
             .add_plugin(generator::Plugin)
-            .add_plugin(transformer::Plugin);
+            .add_plugin(transformer::Plugin)
+            .add_plugin(sign::Plugin);
     }
 }
