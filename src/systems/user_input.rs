@@ -8,7 +8,7 @@ use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
 use crate::entities::*;
-use crate::entities::{ritual_site::RitualSite, tree::Tree};
+use crate::entities::{ritual_site::RitualSite, sign::Sign, tree::Tree};
 use crate::{entities::tree::MarkCutTree, systems::Stack};
 
 use super::{
@@ -536,6 +536,7 @@ pub struct Details<'w, 's> {
     fireplace: Query<'w, 's, &'static Fireplace>,
     tree: Query<'w, 's, &'static tree::Tree>,
     ritual_site: Query<'w, 's, &'static RitualSite>,
+    sign: Query<'w, 's, &'static Sign>,
 }
 
 impl<'w, 's> Details<'w, 's> {
@@ -602,6 +603,11 @@ impl<'w, 's> Details<'w, 's> {
                     .collect();
                 ui.label("Ritual site");
                 ui.label(format!("{}", needs));
+            }
+
+            if let Ok(sign) = self.sign.get(entity) {
+                ui.label(format!("Sign of {:?}", sign.thing));
+                ui.label("(E) put item");
             }
         }
     }

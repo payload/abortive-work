@@ -1,6 +1,6 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use crate::entities::{tree, Boulder, ConveyorBelt, Fireplace, Mage, Pile};
+use crate::entities::{sign::Sign, tree::Tree, Boulder, ConveyorBelt, Fireplace, Mage, Pile};
 
 use super::Focus;
 
@@ -25,11 +25,12 @@ fn update(
 pub struct InteractWithFocus<'w, 's> {
     focus: Query<'w, 's, &'static Focus>,
     mage: Query<'w, 's, &'static mut Mage>,
-    trees: Query<'w, 's, &'static mut tree::Tree>,
+    trees: Query<'w, 's, &'static mut Tree>,
     boulders: Query<'w, 's, &'static mut Boulder>,
     belts: Query<'w, 's, &'static mut ConveyorBelt>,
     piles: Query<'w, 's, &'static mut Pile>,
     fireplaces: Query<'w, 's, &'static mut Fireplace>,
+    signs: Query<'w, 's, &'static mut Sign>,
 }
 
 impl<'w, 's> InteractWithFocus<'w, 's> {
@@ -67,6 +68,14 @@ impl<'w, 's> InteractWithFocus<'w, 's> {
 
         if let Ok(mut fireplace) = self.fireplaces.get_mut(entity) {
             fireplace.lit = !fireplace.lit;
+        }
+
+        if let Ok(mut sign) = self.signs.get_mut(entity) {
+            if let Some(thing_from_inventory) = mage.take_first(1.0) {
+                if let Some(thing_from_sign) = sign.thing.replace(thing_from_inventory) {
+                    mage.put_into_inventory(thing_from_sign, 1.0);
+                }
+            }
         }
     }
 }

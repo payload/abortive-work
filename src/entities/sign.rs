@@ -3,7 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 #[derive(Default)]
 pub struct Sign {
-    thing: Option<Thing>,
+    pub thing: Option<Thing>,
 }
 pub struct Model;
 pub struct Plugin;
@@ -43,6 +43,7 @@ impl<'w, 's> Spawn<'w, 's> {
                 Transform::from_translation(pos),
                 GlobalTransform::identity(),
                 Destructable,
+                FocusObject::new(),
             ))
             .push_children(&[model]);
     }
