@@ -1,16 +1,17 @@
 use crate::systems::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-#[derive(Default)]
 pub struct Sign {
     pub thing: Option<Thing>,
+    pub content_model: Entity,
 }
 pub struct Model;
 pub struct Plugin;
 
 impl bevy::prelude::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource);
+        app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource)
+            .add_system_to_stage(CoreStage::First, display_content);
     }
 }
 
@@ -37,15 +38,20 @@ impl<'w, 's> Spawn<'w, 's> {
             .insert(Model)
             .id();
 
+        let content_model = self.cmds.spawn().id();
+
         self.cmds
             .spawn_bundle((
-                Sign { thing },
+                Sign {
+                    thing,
+                    content_model,
+                },
                 Transform::from_translation(pos),
                 GlobalTransform::identity(),
                 Destructable,
                 FocusObject::new(),
             ))
-            .push_children(&[model]);
+            .push_children(&[model, content_model]);
     }
 }
 
@@ -76,4 +82,26 @@ fn init_resource(
         }),
         mesh: meshes.add(shape::Box::new(0.45, 0.4, 0.05).into()),
     });
+}
+
+fn display_content(
+    signs: Query<&Sign, Changed<Sign>>,
+    mut visible: Query<&mut Visible>,
+    mut _cmds: Commands,
+) {
+    for sign in signs.iter() {
+        if let Some(thing) = sign.thing {
+            match thing {
+                // TODO insert PbrBundle
+                Thing::Stone => {}
+                Thing::Coal => {}
+                Thing::Iron => {}
+                Thing::Gold => {}
+                Thing::Tool => {}
+                Thing::Wood => {}
+            }
+        } else if let Ok(mut visible) = visible.get_mut(sign.content_model) {
+            visible.is_visible = false;
+        }
+    }
 }
