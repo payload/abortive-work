@@ -11,7 +11,7 @@ pub struct Plugin;
 impl bevy::prelude::Plugin for Plugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource)
-            .add_system_to_stage(CoreStage::First, display_content);
+            .add_system_to_stage(CoreStage::PreUpdate, display_content);
     }
 }
 
@@ -23,16 +23,12 @@ pub struct Spawn<'w, 's> {
 
 impl<'w, 's> Spawn<'w, 's> {
     pub fn spawn(&mut self, thing: Option<Thing>, pos: Vec3) {
-        let mut transform = self.res.transform.clone();
-        transform.rotate(Quat::from_rotation_y(
-            10.0 * (0.5 - fastrand::f32()).to_radians(),
-        ));
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
-                transform,
-                material: self.res.material.clone(),
-                mesh: self.res.mesh.clone(),
+                transform: self.res.sign_transform.clone(),
+                material: self.res.sign_material.clone(),
+                mesh: self.res.sign_mesh.clone(),
                 ..Default::default()
             })
             .insert(Model)
@@ -46,7 +42,11 @@ impl<'w, 's> Spawn<'w, 's> {
                     thing,
                     content_model,
                 },
-                Transform::from_translation(pos),
+                Transform {
+                    translation: pos,
+                    rotation: Quat::from_rotation_y(10.0 * (0.5 - fastrand::f32()).to_radians()),
+                    scale: Vec3::ONE,
+                },
                 GlobalTransform::identity(),
                 Destructable,
                 FocusObject::new(),
@@ -57,9 +57,10 @@ impl<'w, 's> Spawn<'w, 's> {
 
 #[derive(Clone)]
 pub struct Resource {
-    pub transform: Transform,
-    pub material: Handle<StandardMaterial>,
-    pub mesh: Handle<Mesh>,
+    pub sign_transform: Transform,
+    pub sign_material: Handle<StandardMaterial>,
+    pub sign_mesh: Handle<Mesh>,
+    pub triangle_mesh: Handle<Mesh>,
 }
 
 fn init_resource(
@@ -68,32 +69,46 @@ fn init_resource(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     cmds.insert_resource(Resource {
-        transform: Transform {
+        sign_transform: Transform {
             translation: Vec3::new(0.0, 0.5, 0.0),
             rotation: Quat::from_rotation_x(30f32.to_radians()),
             scale: Vec3::ONE,
         },
-        material: materials.add(StandardMaterial {
+        sign_material: materials.add(StandardMaterial {
             base_color: Color::rgb(0.53, 0.36, 0.24),
             reflectance: 0.0,
             roughness: 1.0,
             metallic: 0.0,
             ..Default::default()
         }),
-        mesh: meshes.add(shape::Box::new(0.45, 0.4, 0.05).into()),
+        sign_mesh: meshes.add(shape::Box::new(0.45, 0.4, 0.05).into()),
+
+        triangle_mesh: meshes.add(triangle()),
     });
 }
 
 fn display_content(
     signs: Query<&Sign, Changed<Sign>>,
     mut visible: Query<&mut Visible>,
-    mut _cmds: Commands,
+    mut cmds: Commands,
+    res: Res<Resource>,
 ) {
     for sign in signs.iter() {
         if let Some(thing) = sign.thing {
             match thing {
                 // TODO insert PbrBundle
-                Thing::Stone => {}
+                Thing::Stone => {
+                    let rot = Quat::from_rotation_x(-60f32.to_radians());
+                    cmds.entity(sign.content_model).insert_bundle(PbrBundle {
+                        transform: Transform {
+                            translation: 0.5 * Vec3::Y + rot.mul_vec3(0.051 * Vec3::Y),
+                            rotation: rot,
+                            scale: 0.3 * Vec3::ONE,
+                        },
+                        mesh: res.triangle_mesh.clone(),
+                        ..Default::default()
+                    });
+                }
                 Thing::Coal => {}
                 Thing::Iron => {}
                 Thing::Gold => {}

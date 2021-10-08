@@ -5,6 +5,7 @@ use bevy::{
     render::{mesh::Indices, pipeline::PrimitiveTopology},
 };
 use lyon::{
+    geom::euclid::point2,
     lyon_tessellation::{
         BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, VertexBuffers,
     },
@@ -166,6 +167,47 @@ pub fn curve(start: Vec3, mid: Vec3, end: Vec3, width: f32) -> Mesh {
 
     normals.extend(vertex_buffer.vertices.iter().map(|_| [0.0, 1.0, 0.0]));
     uvs.extend(vertex_buffer.vertices.iter().map(|_| [0.0, 0.0]));
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    mesh.set_indices(Some(Indices::U16(vertex_buffer.indices)));
+    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, vertex_buffer.vertices);
+    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh
+}
+
+pub fn triangle() -> Mesh {
+    let mut builder = Path::builder();
+    builder.begin(point2(0.5, 0.0));
+    builder.line_to(point2(-0.5, 0.0));
+    builder.line_to(point2(0.0, 1.0));
+    builder.end(true);
+    let path = builder.build();
+
+    let mut vertex_buffer: VertexBuffers<[f32; 3], u16> = VertexBuffers::new();
+    let mut tesselator = StrokeTessellator::new();
+    tesselator
+        .tessellate_path(
+            &path,
+            &StrokeOptions::default()
+                .with_line_width(0.1)
+                .with_tolerance(0.01),
+            &mut BuffersBuilder::new(&mut vertex_buffer, |vertex: StrokeVertex| {
+                [vertex.position().x, 0.0, vertex.position().y]
+            }),
+        )
+        .unwrap();
+
+    let normals = vertex_buffer
+        .vertices
+        .iter()
+        .map(|_| [0.0, 1.0, 0.0])
+        .collect::<Vec<_>>();
+    let uvs = vertex_buffer
+        .vertices
+        .iter()
+        .map(|_| [0.0, 0.0])
+        .collect::<Vec<_>>();
 
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     mesh.set_indices(Some(Indices::U16(vertex_buffer.indices)));
