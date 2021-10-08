@@ -1,6 +1,7 @@
 use bevy::{
     ecs::{entity::EntityMap, system::SystemParam},
     input::{keyboard::KeyboardInput, mouse::MouseWheel, system::exit_on_esc_system, ElementState},
+    prelude::shape::Capsule,
     prelude::*,
 };
 use bevy_egui::egui::{self, FontDefinitions, FontFamily};
@@ -45,6 +46,8 @@ impl Plugin for UserInputPlugin {
 pub struct DebugConfig {
     pub imp_walk_destination: bool,
     pub spawn_chains_belt_def_duration: f32,
+    pub tree_capsule_mesh: Option<Handle<Mesh>>,
+    pub tree_capsule: shape::Capsule,
 }
 
 #[derive(Debug)]
@@ -427,6 +430,7 @@ fn example_ui(
     egui_ctx: Res<EguiContext>,
     details: Details,
     boulder_config: ResMut<BoulderConfig>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut debug_config: ResMut<DebugConfig>,
 ) {
     let mut fonts = FontDefinitions::default();
@@ -495,6 +499,29 @@ fn example_ui(
                     .text("spawn chains belt defs duration"),
             );
 
+            //
+
+            ui.heading("Debug tree capsule");
+
+            let mut c = debug_config.tree_capsule;
+            ui.add(egui::Slider::new(&mut c.depth, 0.0..=1.0).text("depth"));
+            ui.add(egui::Slider::new(&mut c.radius, 0.0..=1.0).text("radius"));
+            ui.add(egui::Slider::new(&mut c.latitudes, 2..=20).text("latitudes"));
+            ui.add(egui::Slider::new(&mut c.longitudes, 2..=20).text("longitudes"));
+            ui.add(egui::Slider::new(&mut c.rings, 1..=10).text("rings"));
+
+            if !capsule_eq(&c, &debug_config.tree_capsule) {
+                debug_config.tree_capsule = c;
+
+                if let Some(handle) = debug_config.tree_capsule_mesh.clone() {
+                    let mesh = Mesh::from(debug_config.tree_capsule);
+                    let handle = meshes.set(handle, mesh);
+                    debug_config.tree_capsule_mesh = Some(handle);
+                }
+            }
+
+            //
+
             ui.add_space(8.0);
             boulder_config_ui(ui, boulder_config);
         });
@@ -510,6 +537,15 @@ fn example_ui(
             });
     } else {
     }
+}
+
+fn capsule_eq(a: &Capsule, b: &Capsule) -> bool {
+    a.depth == b.depth
+        && a.radius == b.radius
+        && a.latitudes == b.latitudes
+        && a.longitudes == b.longitudes
+        && a.rings == b.rings
+    // IGNORE a.uv_profile == b.uv_profile
 }
 
 fn boulder_config_ui(ui: &mut egui::Ui, mut boulder_config: ResMut<BoulderConfig>) {

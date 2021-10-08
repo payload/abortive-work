@@ -2,7 +2,10 @@ use std::f32::consts::TAU;
 
 use bevy::{
     prelude::*,
-    render::{mesh::Indices, pipeline::PrimitiveTopology},
+    render::{
+        mesh::{Indices, VertexAttributeValues},
+        pipeline::PrimitiveTopology,
+    },
 };
 use lyon::{
     geom::euclid::point2,
@@ -215,4 +218,18 @@ pub fn triangle() -> Mesh {
     mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh
+}
+
+#[allow(unused)]
+pub fn mesh_randomize(mesh: &mut Mesh, radius: f32) {
+    let r = || -0.5 + radius * fastrand::f32();
+    if let Some(VertexAttributeValues::Float32x3(vecs)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for vec in vecs.iter_mut() {
+            vec[0] += r();
+            vec[1] += r();
+            vec[2] += r();
+        }
+    }
 }

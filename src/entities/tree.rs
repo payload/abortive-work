@@ -18,7 +18,7 @@ pub struct Plugin;
 
 impl bevy::prelude::Plugin for Plugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, init_resource)
+        app.add_startup_system_to_stage(StartupStage::Startup, init_resource)
             .add_system_to_stage(CoreStage::Last, update_trees);
     }
 }
@@ -105,25 +105,27 @@ pub struct Resource {
 
 fn init_resource(
     mut cmds: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut debug_config: ResMut<DebugConfig>,
+    materials: Res<ThingMaterials>,
 ) {
+    let capsule = shape::Capsule {
+        radius: 0.2,
+        depth: 1.0,
+        latitudes: 5,
+        longitudes: 24,
+        rings: 5,
+        ..Default::default()
+    };
+    let mesh = meshes.add(capsule.into());
+
+    debug_config.tree_capsule_mesh = Some(mesh.clone());
+    debug_config.tree_capsule = capsule;
+
     cmds.insert_resource(Resource {
         model_offset: Vec3::new(0.0, 0.3, 0.0),
-        material: materials.add(StandardMaterial {
-            base_color: Color::DARK_GREEN,
-            reflectance: 0.0,
-            roughness: 1.0,
-            metallic: 0.0,
-            ..Default::default()
-        }),
-        mesh: meshes.add(
-            shape::Capsule {
-                radius: 0.2,
-                ..Default::default()
-            }
-            .into(),
-        ),
+        material: materials.get(Thing::Wood),
+        mesh,
     });
 }
 
