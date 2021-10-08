@@ -6,6 +6,7 @@ use bevy::{
         mesh::{Indices, VertexAttributeValues},
         pipeline::PrimitiveTopology,
     },
+    utils::HashMap,
 };
 use lyon::{
     geom::euclid::point2,
@@ -220,16 +221,49 @@ pub fn triangle() -> Mesh {
     mesh
 }
 
-#[allow(unused)]
-pub fn mesh_randomize(mesh: &mut Mesh, radius: f32) {
-    let r = || -0.5 + radius * fastrand::f32();
+/**
+ * Displaces vertex positions in a radius around current position.
+ * Radius is more like a box with extents, not a sphere.
+ * Vertices with a similar position, within 0.01, are considered to
+ * be the same corner and moved together.
+ */
+pub fn mesh_displace(mesh: &mut Mesh, radius: f32) {
+    let r = || radius * (fastrand::f32() - 0.5);
     if let Some(VertexAttributeValues::Float32x3(vecs)) =
         mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
     {
-        for vec in vecs.iter_mut() {
-            vec[0] += r();
-            vec[1] += r();
-            vec[2] += r();
+        let mut map: HashMap<[i32; 3], Vec<usize>> =
+            HashMap::with_capacity_and_hasher(vecs.len(), Default::default());
+
+        for (index, [a, b, c]) in vecs.iter().enumerate() {
+            let s = 100.0;
+            let ivec = [(a * s) as i32, (b * s) as i32, (c * s) as i32];
+            map.entry(ivec).or_insert(Vec::new()).push(index);
         }
+
+        for indices in map.into_values() {
+            let offset = [r(), r(), r()];
+            for index in indices {
+                let vec = &mut vecs[index];
+                vec[0] += offset[0];
+                vec[1] += offset[0];
+                vec[2] += offset[0];
+            }
+        }
+    }
+}
+
+pub trait MeshModifiers: Sized {
+    fn displace_mut(&mut self, radius: f32);
+
+    fn displace(mut self, radius: f32) -> Self {
+        self.displace_mut(radius);
+        self
+    }
+}
+
+impl MeshModifiers for Mesh {
+    fn displace_mut(&mut self, radius: f32) {
+        mesh_displace(self, radius);
     }
 }

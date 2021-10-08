@@ -9,8 +9,11 @@ use bevy_egui::*;
 pub use bevy_mod_picking::*;
 
 use crate::entities::*;
-use crate::entities::{ritual_site::RitualSite, sign::Sign, tree::Tree};
 use crate::{entities::tree::MarkCutTree, systems::Stack};
+use crate::{
+    entities::{ritual_site::RitualSite, sign::Sign, tree::Tree},
+    systems::MeshModifiers,
+};
 
 use super::{
     interact_with_focus::InteractWithFocusEvent, AugmentSpawn, BuildingTool, BuildingToolPlugin,
@@ -514,8 +517,8 @@ fn example_ui(
                 debug_config.tree_capsule = c;
 
                 if let Some(handle) = debug_config.tree_capsule_mesh.clone() {
-                    let mesh = Mesh::from(debug_config.tree_capsule);
-                    let handle = meshes.set(handle, mesh);
+                    let handle =
+                        meshes.set(handle, Mesh::from(debug_config.tree_capsule).displace(0.05));
                     debug_config.tree_capsule_mesh = Some(handle);
                 }
             }

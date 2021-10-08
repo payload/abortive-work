@@ -113,12 +113,12 @@ fn init_resource(
         radius: 0.2,
         depth: 1.0,
         latitudes: 5,
-        longitudes: 24,
+        longitudes: 10,
         rings: 5,
         ..Default::default()
     };
-    let mesh = meshes.add(capsule.into());
 
+    let mesh = meshes.add(Mesh::from(capsule).displace(0.05));
     debug_config.tree_capsule_mesh = Some(mesh.clone());
     debug_config.tree_capsule = capsule;
 
