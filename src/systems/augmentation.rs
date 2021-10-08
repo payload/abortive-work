@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use super::{disk, ring};
+use super::{disk, ring, unlit_material};
 
 pub struct AugmentationPlugin;
 
@@ -107,17 +107,9 @@ fn load_assets(
 ) {
     cmds.insert_resource(AugmentAssets {
         pedestal_transform: Transform::from_xyz(0.0, 0.05, 0.0),
-        pedestal_material: materials.add(color_material(Color::ANTIQUE_WHITE)),
+        pedestal_material: materials.add(unlit_material(Color::ANTIQUE_WHITE)),
         pedestal_mesh: meshes.add(disk(0.9, 24)),
     });
-
-    fn color_material(color: Color) -> StandardMaterial {
-        StandardMaterial {
-            base_color: color,
-            unlit: true,
-            ..Default::default()
-        }
-    }
 }
 
 pub struct Pedestal(Entity);

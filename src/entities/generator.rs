@@ -1,10 +1,9 @@
+use super::{BeltDef, ConveyorBelt};
 use crate::systems::*;
 use bevy::{
     ecs::system::{EntityCommands, SystemParam},
     prelude::*,
 };
-
-use super::{BeltDef, ConveyorBelt};
 
 #[derive(Default)]
 pub struct Generator {

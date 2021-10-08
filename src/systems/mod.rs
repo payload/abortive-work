@@ -33,10 +33,13 @@ mod brain;
 pub use brain::*;
 
 mod interact_with_focus;
+pub mod things;
+pub use things::{flat_material, unlit_material, Thing, ThingMaterials};
 
 pub struct SystemsPlugin;
 impl Plugin for SystemsPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_plugin(interact_with_focus::ModPlugin);
+        app.add_plugin(interact_with_focus::ModPlugin)
+            .add_plugin(things::ModPlugin);
     }
 }

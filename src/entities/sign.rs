@@ -92,29 +92,23 @@ fn display_content(
     mut visible: Query<&mut Visible>,
     mut cmds: Commands,
     res: Res<Resource>,
+    materials: Res<ThingMaterials>,
 ) {
     for sign in signs.iter() {
         if let Some(thing) = sign.thing {
-            match thing {
-                // TODO insert PbrBundle
-                Thing::Stone => {
-                    let rot = Quat::from_rotation_x(-60f32.to_radians());
-                    cmds.entity(sign.content_model).insert_bundle(PbrBundle {
-                        transform: Transform {
-                            translation: 0.5 * Vec3::Y + rot.mul_vec3(0.051 * Vec3::Y),
-                            rotation: rot,
-                            scale: 0.3 * Vec3::ONE,
-                        },
-                        mesh: res.triangle_mesh.clone(),
-                        ..Default::default()
-                    });
-                }
-                Thing::Coal => {}
-                Thing::Iron => {}
-                Thing::Gold => {}
-                Thing::Tool => {}
-                Thing::Wood => {}
-            }
+            let material = materials.get(thing);
+            let rot = Quat::from_rotation_x(-60f32.to_radians());
+
+            cmds.entity(sign.content_model).insert_bundle(PbrBundle {
+                transform: Transform {
+                    translation: 0.5 * Vec3::Y + rot.mul_vec3(0.051 * Vec3::Y),
+                    rotation: rot,
+                    scale: 0.3 * Vec3::ONE,
+                },
+                mesh: res.triangle_mesh.clone(),
+                material,
+                ..Default::default()
+            });
         } else if let Ok(mut visible) = visible.get_mut(sign.content_model) {
             visible.is_visible = false;
         }

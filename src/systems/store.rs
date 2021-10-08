@@ -1,16 +1,6 @@
 #![allow(unused)]
 
-use crate::entities::BoulderMaterial;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Thing {
-    Stone,
-    Coal,
-    Iron,
-    Gold,
-    Tool,
-    Wood,
-}
+use crate::{entities::BoulderMaterial, systems::Thing};
 
 #[derive(Default, Clone, Debug)]
 pub struct Store {

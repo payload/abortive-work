@@ -1,6 +1,6 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use crate::systems::{Destructable, FocusObject};
+use crate::systems::*;
 
 use super::{Blocking, NotGround};
 
@@ -43,7 +43,7 @@ pub struct BoulderPlugin;
 
 impl Plugin for BoulderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::PreStartup, load_boulder_assets)
+        app.add_startup_system_to_stage(StartupStage::Startup, load_boulder_assets)
             .add_system_to_stage(CoreStage::PreUpdate, update_boulder_config)
             .init_resource::<BoulderConfig>();
     }
@@ -110,27 +110,17 @@ impl<'w, 's> BoulderSpawn<'w, 's> {
 
 fn load_boulder_assets(
     mut cmds: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    materials: Res<ThingMaterials>,
 ) {
     cmds.insert_resource(BoulderAssets {
         transform: Transform::from_xyz(0.0, 0.9, 0.0),
-        stone: materials.add(material(Color::DARK_GRAY)),
-        coal: materials.add(material(Color::BLACK)),
-        gold: materials.add(material(Color::GOLD)),
-        iron: materials.add(material(Color::ORANGE_RED)),
         mesh: meshes.add(shape::Box::new(1.0, 2.0, 1.0).into()),
+        stone: materials.get(Thing::Stone),
+        coal: materials.get(Thing::Coal),
+        gold: materials.get(Thing::Gold),
+        iron: materials.get(Thing::Iron),
     });
-
-    fn material(color: Color) -> StandardMaterial {
-        StandardMaterial {
-            base_color: color,
-            metallic: 0.0,
-            reflectance: 0.0,
-            roughness: 1.0,
-            ..Default::default()
-        }
-    }
 }
 
 fn update_boulder_config(

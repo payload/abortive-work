@@ -29,7 +29,7 @@ fn main() {
         .add_plugin(FocusPlugin)
         .add_plugin(SystemsPlugin)
         .add_plugin(DebugLinesPlugin)
-        .add_startup_system(spawn_level_1)
+        .add_startup_system_to_stage(StartupStage::PostStartup, spawn_level_1)
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
             SystemSet::new()

@@ -4,14 +4,11 @@ use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 use bevy_mod_picking::PickableBundle;
 use bevy_prototype_debug_lines::DebugLines;
 
-use crate::{
-    entities::StoreIntoPile,
-    systems::{BrainPlugin, DebugConfig, Destructable, FunnyAnimation, Thing},
-};
+use crate::systems::*;
 
 use super::{
     tree::{self, MarkCutTree},
-    Boulder, ConveyorBelt,
+    Boulder, ConveyorBelt, StoreIntoPile,
 };
 
 #[derive(Clone, Default)]
@@ -132,16 +129,9 @@ fn load_assets(
             rotation: Quat::from_rotation_x(0.3),
             scale: Vec3::ONE,
         },
-        material: materials.add(material(Color::SALMON)),
+        material: materials.add(flat_material(Color::SALMON)),
         mesh: meshes.add(shape::Box::new(0.4, 0.6, 0.4).into()),
     });
-
-    fn material(color: Color) -> StandardMaterial {
-        StandardMaterial {
-            base_color: color,
-            ..Default::default()
-        }
-    }
 }
 
 fn update_walk(

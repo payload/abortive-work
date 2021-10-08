@@ -1,13 +1,10 @@
-use std::f32::consts::FRAC_PI_4;
-
+use super::{NotGround, StoreIntoPile};
+use crate::systems::*;
 use bevy::{
     ecs::system::{EntityCommands, SystemParam},
     prelude::*,
 };
-
-use crate::systems::{Focus, Stack, Thing};
-
-use super::{NotGround, StoreIntoPile};
+use std::f32::consts::FRAC_PI_4;
 
 #[derive(Default)]
 pub struct Mage {

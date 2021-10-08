@@ -4,12 +4,9 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_prototype_debug_lines::DebugLines;
 use lyon::geom::CubicBezierSegment;
 
-use crate::{
-    extensions::{ToPoint, ToVec3},
-    systems::{curve, DebugConfig, Destructable, FocusObject, Thing},
-};
-
 use super::NotGround;
+use crate::extensions::{ToPoint, ToVec3};
+use crate::systems::*;
 
 #[allow(unused)]
 #[derive(Clone, Copy)]
