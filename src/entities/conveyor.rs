@@ -15,6 +15,7 @@ struct Item {
     amount: f32,
     size: i32,
     pos: i32,
+    displacement: f32,
 }
 
 #[derive(Default)]
@@ -45,6 +46,7 @@ impl ConveyorBelt {
                 amount,
                 size: 25,
                 pos: 0,
+                displacement: fastrand::f32() - 0.5,
             },
         )
     }
@@ -58,6 +60,7 @@ impl ConveyorBelt {
                     amount: 1.0,
                     size: 25,
                     pos: pos,
+                    displacement: fastrand::f32() - 0.5,
                 },
             );
         }
@@ -69,6 +72,7 @@ impl ConveyorBelt {
             amount: 1.0,
             size: 25,
             pos,
+            displacement: fastrand::f32() - 0.5,
         };
         if let Some(index) = self.items.iter().position(|item| item.pos >= pos) {
             self.items.insert(index, item);
@@ -708,9 +712,10 @@ fn display_items(
             let linear_item_pos = item.pos as f32 / length_f32;
             let item_pos = m + segment.sample(linear_item_pos).to_vec3();
             let tangent = segment.derivative(linear_item_pos).normalize();
+            let normal = Vec3::new(tangent.y, 0.0, -tangent.x);
 
             let transform = Transform {
-                translation: item_pos + 0.25 * Vec3::Y,
+                translation: item_pos + 0.25 * Vec3::Y + 0.2 * item.displacement * normal,
                 rotation: Quat::from_rotation_y(tangent.y.atan2(tangent.x)),
                 scale: item_size * Vec3::ONE,
             };
