@@ -1,4 +1,4 @@
-use bevy::{ecs::schedule::ShouldRun, prelude::*};
+use bevy::prelude::*;
 
 mod entities;
 use bevy_prototype_debug_lines::DebugLinesPlugin;
@@ -30,12 +30,7 @@ fn main() {
         .add_plugin(SystemsPlugin)
         .add_plugin(DebugLinesPlugin)
         .add_startup_system_to_stage(StartupStage::PostStartup, spawn_level_1)
-        .add_system_set_to_stage(
-            CoreStage::PostUpdate,
-            SystemSet::new()
-                .with_run_criteria(once)
-                .with_system(remove_trees_from_buildings),
-        )
+        .add_system_to_stage(CoreStage::PostUpdate, remove_trees_from_buildings)
         .run();
 }
 
@@ -176,24 +171,19 @@ fn spawn_level_1(
     conveyor.spawn_chain(ChainLink::Pos(pos(-30, -30)), ChainLink::Pos(pos(-40, -30)));
 }
 
-fn once(mut has_run: Local<bool>) -> ShouldRun {
-    if !*has_run {
-        *has_run = true;
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
-    }
-}
-
 fn remove_trees_from_buildings(
     trees: Query<(Entity, &Transform), With<Tree>>,
     others: Query<&Transform, (With<Destructable>, Without<Tree>)>,
     mut cmds: Commands,
+    mut frame: Local<usize>,
 ) {
-    for (a_tree, t_tree) in trees.iter() {
-        for t_other in others.iter() {
-            if t_tree.translation.distance_squared(t_other.translation) < 4.0 {
-                cmds.entity(a_tree).despawn_recursive();
+    *frame += 1;
+    if *frame == 2 {
+        for (a_tree, t_tree) in trees.iter() {
+            for t_other in others.iter() {
+                if t_tree.translation.distance_squared(t_other.translation) < 4.0 {
+                    cmds.entity(a_tree).despawn_recursive();
+                }
             }
         }
     }
