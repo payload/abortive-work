@@ -101,7 +101,7 @@ impl Plugin for ConveyorPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system_to_stage(CoreStage::PreUpdate, convey_items)
-            .add_system_to_stage(CoreStage::PreUpdate, spawn_chains)
+            .add_system_to_stage(CoreStage::Last, spawn_chains)
             .add_system(display_items)
             .add_system(debug_spawn_chains)
             .add_system(manage_dynamic_ghosts);
