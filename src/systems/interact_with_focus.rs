@@ -1,6 +1,9 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use crate::entities::{sign::Sign, tree::Tree, Boulder, ConveyorBelt, Mage, Pile};
+use crate::{
+    entities::{sign::Sign, tree::Tree, Boulder, ConveyorBelt, Mage, Pile},
+    systems::things::Thing,
+};
 
 use super::Focus;
 
@@ -66,11 +69,20 @@ impl<'w, 's> InteractWithFocus<'w, 's> {
         }
 
         if let Ok(mut sign) = self.signs.get_mut(entity) {
-            if let Some(thing_from_inventory) = mage.take_first(1.0) {
-                if let Some(thing_from_sign) = sign.thing.replace(thing_from_inventory) {
-                    mage.put_into_inventory(thing_from_sign, 1.0);
-                }
-            }
+            use Thing::*;
+            let next_thing = match sign.thing {
+                None => Some(Stone),
+                Some(thing) => match thing {
+                    Stone => Some(Coal),
+                    Coal => Some(Iron),
+                    Iron => Some(Gold),
+                    Gold => Some(Tool),
+                    Tool => Some(Wood),
+                    Wood => None,
+                },
+            };
+
+            sign.thing = next_thing;
         }
     }
 }

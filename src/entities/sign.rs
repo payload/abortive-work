@@ -1,7 +1,7 @@
 use crate::systems::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use super::{Boulder, ConveyorBelt};
+use super::{tree::Tree, Boulder, ConveyorBelt};
 
 #[derive(Clone)]
 pub struct Sign {
@@ -104,7 +104,7 @@ struct Influence {
 
 fn update_sign_influence(
     signs: Query<(Entity, &Transform), With<Sign>>,
-    others: Query<(Entity, &Transform), Or<(With<Boulder>, With<ConveyorBelt>)>>,
+    others: Query<(Entity, &Transform), Or<(With<Boulder>, With<ConveyorBelt>, With<Tree>)>>,
     mut influences: Query<&mut Influence>,
     mut cmds: Commands,
 ) {
@@ -128,9 +128,14 @@ fn update_sign_influence(
 
 fn update_influenced_by_signs(
     signs: Query<&Sign>,
-    mut influenced: Query<(&Influence, Option<&mut Boulder>, Option<&mut ConveyorBelt>)>,
+    mut influenced: Query<(
+        &Influence,
+        Option<&mut Boulder>,
+        Option<&mut ConveyorBelt>,
+        Option<&mut Tree>,
+    )>,
 ) {
-    for (influence, boulder, belt) in influenced.iter_mut() {
+    for (influence, boulder, belt, tree) in influenced.iter_mut() {
         let signs: Vec<Sign> = influence
             .signs
             .iter()
@@ -165,6 +170,20 @@ fn update_influenced_by_signs(
 
             if belt.marked_for_thing != thing {
                 belt.marked_for_thing = thing;
+            }
+        }
+
+        if let Some(mut tree) = tree {
+            let mut mark = false;
+
+            for sign in signs.iter() {
+                if sign.thing == Some(Thing::Wood) {
+                    mark = true;
+                }
+            }
+
+            if tree.mark_cut_tree != mark {
+                tree.mark_cut_tree = mark;
             }
         }
     }
