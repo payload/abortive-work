@@ -97,8 +97,8 @@ impl Plugin for ConveyorPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, load_assets)
             .add_system_to_stage(CoreStage::PreUpdate, convey_items)
-            .add_system_to_stage(CoreStage::PostUpdate, debug_items)
             .add_system_to_stage(CoreStage::PreUpdate, spawn_chains)
+            .add_system(display_items)
             .add_system(debug_spawn_chains)
             .add_system(manage_dynamic_ghosts);
     }
@@ -532,6 +532,7 @@ pub struct ConveyorAssets {
     pub material: Handle<StandardMaterial>,
     pub ghost_material: Handle<StandardMaterial>,
     pub mesh: Handle<Mesh>,
+    pub item_mesh: Handle<Mesh>,
 }
 
 fn load_assets(
@@ -556,6 +557,7 @@ fn load_assets(
             ..Default::default()
         }),
         mesh: meshes.add(shape::Box::new(0.7, 0.1, 0.95).into()),
+        item_mesh: meshes.add(disk(0.5, 12)),
     });
 }
 
@@ -675,6 +677,75 @@ fn convey_items(
     }
 }
 
+struct ItemModel;
+
+fn display_items(
+    belts: Query<(&ConveyorBelt, &Transform)>,
+    models: Query<Entity, With<ItemModel>>,
+    mut cmds: Commands,
+    mut visible: Query<&mut Visible, With<ItemModel>>,
+    assets: Res<ConveyorAssets>,
+    thing_materials: Res<ThingMaterials>,
+) {
+    let mut models: Vec<Entity> = models.iter().collect();
+
+    for (belt, _transform) in belts.iter() {
+        let length_f32 = belt.length as f32;
+        let BeltDef(a, m, b) = belt.def;
+        let from = (a - m).to_point();
+        let to = (b - m).to_point();
+        let ctrl1 = from * 0.5;
+        let ctrl2 = to * 0.5;
+        let segment = CubicBezierSegment {
+            from,
+            ctrl1,
+            ctrl2,
+            to,
+        };
+
+        for item in belt.items.iter() {
+            let item_size = item.size as f32 / 100.0;
+            let linear_item_pos = item.pos as f32 / length_f32;
+            let item_pos = m + segment.sample(linear_item_pos).to_vec3();
+            let tangent = segment.derivative(linear_item_pos).normalize();
+
+            let transform = Transform {
+                translation: item_pos + 0.25 * Vec3::Y,
+                rotation: Quat::from_rotation_y(tangent.y.atan2(tangent.x)),
+                scale: item_size * Vec3::ONE,
+            };
+            let material = thing_materials.get(item.thing);
+
+            if let Some(entity) = models.pop() {
+                cmds.entity(entity).insert_bundle((
+                    transform,
+                    material,
+                    Visible {
+                        is_visible: true,
+                        is_transparent: false,
+                    },
+                ));
+            } else {
+                cmds.spawn()
+                    .insert_bundle(PbrBundle {
+                        transform,
+                        material,
+                        mesh: assets.item_mesh.clone(),
+                        ..Default::default()
+                    })
+                    .insert(ItemModel);
+            }
+        }
+    }
+
+    for model in models {
+        for mut visible in visible.get_mut(model) {
+            visible.is_visible = false;
+        }
+    }
+}
+
+#[allow(unused)]
 fn debug_items(belts: Query<(&ConveyorBelt, &Transform)>, mut debug: ResMut<DebugLines>) {
     for (belt, _transform) in belts.iter() {
         let length_f32 = belt.length as f32;
