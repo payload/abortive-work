@@ -6,22 +6,14 @@ use super::{Blocking, NotGround};
 
 #[derive(Clone)]
 pub struct Boulder {
-    pub material: BoulderMaterial,
+    pub material: Thing,
     pub marked_for_digging: bool,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum BoulderMaterial {
-    Stone,
-    Coal,
-    Iron,
-    Gold,
 }
 
 pub struct BoulderModel;
 
 impl Boulder {
-    pub fn new(material: BoulderMaterial) -> Self {
+    pub fn new(material: Thing) -> Self {
         Self {
             material,
             marked_for_digging: false,
@@ -66,6 +58,7 @@ pub struct BoulderSpawn<'w, 's> {
     cmds: Commands<'w, 's>,
     assets: Res<'w, BoulderAssets>,
     config: Res<'w, BoulderConfig>,
+    thing_materials: Res<'w, ThingMaterials>,
 }
 
 impl<'w, 's> BoulderSpawn<'w, 's> {
@@ -82,12 +75,7 @@ impl<'w, 's> BoulderSpawn<'w, 's> {
             .cmds
             .spawn_bundle(PbrBundle {
                 transform: self.assets.transform,
-                material: match boulder.material {
-                    BoulderMaterial::Stone => self.assets.stone.clone(),
-                    BoulderMaterial::Coal => self.assets.coal.clone(),
-                    BoulderMaterial::Iron => self.assets.iron.clone(),
-                    BoulderMaterial::Gold => self.assets.gold.clone(),
-                },
+                material: self.thing_materials.get(boulder.material),
                 mesh: self.assets.mesh.clone(),
                 ..Default::default()
             })

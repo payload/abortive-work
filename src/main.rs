@@ -71,8 +71,9 @@ fn spawn_level_1(
     mut dump: dump::Spawn,
     mut generator: generator::Spawn,
     mut transformer: transformer::Spawn,
+    mut sign: sign::Spawn,
 ) {
-    use BoulderMaterial::*;
+    use Thing::*;
 
     let noise = Fbm::new();
     let map = PlaneMapBuilder::new(&noise)
@@ -149,11 +150,8 @@ fn spawn_level_1(
 
     fireplace.spawn(Fireplace::new(), at(-1, 0));
 
-    pile.spawn(Pile::new(Thing::Iron, 10.0), at(0, 1));
-    ritual_sites.spawn(
-        RitualSite::new(&[(Thing::Iron, 300), (Thing::Gold, 300)]),
-        at(-7, -6),
-    );
+    pile.spawn(Pile::new(Iron, 10.0), at(0, 1));
+    ritual_sites.spawn(RitualSite::new(&[(Iron, 300), (Gold, 300)]), at(-7, -6));
 
     let dump1 = dump
         .spawn(
@@ -170,7 +168,7 @@ fn spawn_level_1(
 
     let generator1 = generator
         .spawn(
-            Generator::new(Thing::Gold, 0.7),
+            Generator::new(Gold, 0.7),
             at(0, -1).with_rotation(Quat::from_rotation_y(90.0f32.to_radians())),
         )
         .id();
@@ -193,6 +191,9 @@ fn spawn_level_1(
         ChainLink::Entity(transformer1.output_belt2),
         ChainLink::Entity(dump2),
     );
+
+    sign.spawn(Some(Stone), pos(2, -4));
+    sign.spawn(Some(Stone), pos(0, 2));
 
     // to prevent unused ChainLink::Pos
     conveyor.spawn_chain(ChainLink::Pos(pos(-30, -30)), ChainLink::Pos(pos(-40, -30)));

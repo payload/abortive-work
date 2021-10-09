@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::{entities::BoulderMaterial, systems::Thing};
+use crate::systems::Thing;
 
 #[derive(Default, Clone, Debug)]
 pub struct Store {
@@ -199,17 +199,6 @@ impl ThingFilter {
 impl From<Thing> for ThingFilter {
     fn from(thing: Thing) -> Self {
         Self::Thing(thing)
-    }
-}
-
-impl From<BoulderMaterial> for Thing {
-    fn from(material: BoulderMaterial) -> Self {
-        match material {
-            BoulderMaterial::Stone => Self::Stone,
-            BoulderMaterial::Coal => Self::Coal,
-            BoulderMaterial::Iron => Self::Iron,
-            BoulderMaterial::Gold => Self::Gold,
-        }
     }
 }
 

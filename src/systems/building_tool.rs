@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 use crate::entities::*;
 
+use super::things::Thing;
+
 pub struct BuildingToolPlugin;
 
 impl Plugin for BuildingToolPlugin {
@@ -110,7 +112,7 @@ fn update_building_tool(
         tool.build = false;
 
         if let Some(building) = &tool.building {
-            use crate::BoulderMaterial::*;
+            use Thing::*;
             let transform = tool.placement;
 
             match building {

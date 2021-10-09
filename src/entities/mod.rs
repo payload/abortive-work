@@ -58,6 +58,6 @@ impl Plugin for EntitiesPlugin {
             .add_plugin(dump::Plugin)
             .add_plugin(generator::Plugin)
             .add_plugin(transformer::Plugin)
-            .add_plugin(sign::Plugin);
+            .add_plugin(sign::ModPlugin);
     }
 }

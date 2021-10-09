@@ -16,8 +16,8 @@ use crate::{
 };
 
 use super::{
-    interact_with_focus::InteractWithFocusEvent, AugmentSpawn, BuildingTool, BuildingToolPlugin,
-    Buildings, CameraTracking, Destructor, Focus, Store,
+    interact_with_focus::InteractWithFocusEvent, things::Thing, AugmentSpawn, BuildingTool,
+    BuildingToolPlugin, Buildings, CameraTracking, Destructor, Focus, Store,
 };
 
 pub struct UserInputPlugin;
@@ -81,7 +81,7 @@ impl Default for UiState {
             mode: Default::default(),
             build_tool_state: BuildToolState {
                 build: Build::Conveyor,
-                boulder_kind: BoulderMaterial::Stone,
+                boulder_kind: Thing::Stone,
                 start_line: None,
             },
         }
@@ -136,24 +136,19 @@ impl BackAndForth for Build {
     }
 }
 
-impl BackAndForth for BoulderMaterial {
+impl BackAndForth for Thing {
     fn elems(&self) -> &[Self] {
         &BOULDER_MATERIALS
     }
 }
 
 const BUILDS: [Build; 4] = [Build::Boulder, Build::Conveyor, Build::Imp, Build::Sign];
-const BOULDER_MATERIALS: [BoulderMaterial; 4] = [
-    BoulderMaterial::Stone,
-    BoulderMaterial::Coal,
-    BoulderMaterial::Iron,
-    BoulderMaterial::Gold,
-];
+const BOULDER_MATERIALS: [Thing; 4] = [Thing::Stone, Thing::Coal, Thing::Iron, Thing::Gold];
 
 #[derive(Debug)]
 struct BuildToolState {
     build: Build,
-    boulder_kind: BoulderMaterial,
+    boulder_kind: Thing,
     start_line: Option<(Entity, Vec3)>,
 }
 
