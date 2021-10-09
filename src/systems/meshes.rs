@@ -180,6 +180,7 @@ pub fn curve(start: Vec3, mid: Vec3, end: Vec3, width: f32) -> Mesh {
     mesh
 }
 
+#[allow(unused)]
 pub fn triangle() -> Mesh {
     let mut builder = Path::builder();
     builder.begin(point2(0.5, 0.0));

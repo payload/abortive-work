@@ -23,6 +23,7 @@ pub struct Spawn<'w, 's> {
 
 impl<'w, 's> Spawn<'w, 's> {
     pub fn spawn(&mut self, thing: Option<Thing>, pos: Vec3) {
+        let content_model = self.cmds.spawn().id();
         let model = self
             .cmds
             .spawn_bundle(PbrBundle {
@@ -32,9 +33,8 @@ impl<'w, 's> Spawn<'w, 's> {
                 ..Default::default()
             })
             .insert(Model)
+            .push_children(&[content_model])
             .id();
-
-        let content_model = self.cmds.spawn().id();
 
         self.cmds
             .spawn_bundle((
@@ -42,16 +42,12 @@ impl<'w, 's> Spawn<'w, 's> {
                     thing,
                     content_model,
                 },
-                Transform {
-                    translation: pos,
-                    rotation: Quat::from_rotation_y(10.0 * (0.5 - fastrand::f32()).to_radians()),
-                    scale: Vec3::ONE,
-                },
+                Transform::from_translation(pos),
                 GlobalTransform::identity(),
                 Destructable,
                 FocusObject::new(),
             ))
-            .push_children(&[model, content_model]);
+            .push_children(&[model]);
     }
 }
 
@@ -60,7 +56,7 @@ pub struct Resource {
     pub sign_transform: Transform,
     pub sign_material: Handle<StandardMaterial>,
     pub sign_mesh: Handle<Mesh>,
-    pub triangle_mesh: Handle<Mesh>,
+    pub item_mesh: Handle<Mesh>,
 }
 
 fn init_resource(
@@ -69,21 +65,10 @@ fn init_resource(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     cmds.insert_resource(Resource {
-        sign_transform: Transform {
-            translation: Vec3::new(0.0, 0.5, 0.0),
-            rotation: Quat::from_rotation_x(30f32.to_radians()),
-            scale: Vec3::ONE,
-        },
-        sign_material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.53, 0.36, 0.24),
-            reflectance: 0.0,
-            roughness: 1.0,
-            metallic: 0.0,
-            ..Default::default()
-        }),
-        sign_mesh: meshes.add(shape::Box::new(0.45, 0.4, 0.05).into()),
-
-        triangle_mesh: meshes.add(triangle()),
+        sign_transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        sign_material: materials.add(flat_material(Color::AQUAMARINE)),
+        sign_mesh: meshes.add(ring(0.175, 0.125, 16)),
+        item_mesh: meshes.add(disk(0.125, 16)),
     });
 }
 
@@ -96,17 +81,9 @@ fn display_content(
 ) {
     for sign in signs.iter() {
         if let Some(thing) = sign.thing {
-            let material = materials.get(thing);
-            let rot = Quat::from_rotation_x(-60f32.to_radians());
-
             cmds.entity(sign.content_model).insert_bundle(PbrBundle {
-                transform: Transform {
-                    translation: 0.5 * Vec3::Y + rot.mul_vec3(0.051 * Vec3::Y),
-                    rotation: rot,
-                    scale: 0.3 * Vec3::ONE,
-                },
-                mesh: res.triangle_mesh.clone(),
-                material,
+                mesh: res.item_mesh.clone(),
+                material: materials.get(thing),
                 ..Default::default()
             });
         } else if let Ok(mut visible) = visible.get_mut(sign.content_model) {
