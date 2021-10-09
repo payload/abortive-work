@@ -1,6 +1,6 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
-use crate::entities::{sign::Sign, tree::Tree, Boulder, ConveyorBelt, Fireplace, Mage, Pile};
+use crate::entities::{sign::Sign, tree::Tree, Boulder, ConveyorBelt, Mage, Pile};
 
 use super::Focus;
 
@@ -29,7 +29,6 @@ pub struct InteractWithFocus<'w, 's> {
     boulders: Query<'w, 's, &'static mut Boulder>,
     belts: Query<'w, 's, &'static mut ConveyorBelt>,
     piles: Query<'w, 's, &'static mut Pile>,
-    fireplaces: Query<'w, 's, &'static mut Fireplace>,
     signs: Query<'w, 's, &'static mut Sign>,
 }
 
@@ -64,10 +63,6 @@ impl<'w, 's> InteractWithFocus<'w, 's> {
 
         if let Ok(mut tree) = self.trees.get_mut(entity) {
             tree.mark_cut_tree = !tree.mark_cut_tree;
-        }
-
-        if let Ok(mut fireplace) = self.fireplaces.get_mut(entity) {
-            fireplace.lit = !fireplace.lit;
         }
 
         if let Ok(mut sign) = self.signs.get_mut(entity) {

@@ -6,6 +6,7 @@ pub enum Thing {
     Coal,
     Iron,
     Gold,
+    #[allow(unused)]
     Tool,
     Wood,
 }

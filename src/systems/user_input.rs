@@ -1,6 +1,6 @@
 use bevy::{
     ecs::{entity::EntityMap, system::SystemParam},
-    input::{keyboard::KeyboardInput, mouse::MouseWheel, system::exit_on_esc_system, ElementState},
+    input::{mouse::MouseWheel, system::exit_on_esc_system},
     prelude::shape::Capsule,
     prelude::*,
 };
@@ -16,8 +16,8 @@ use crate::{
 };
 
 use super::{
-    interact_with_focus::InteractWithFocusEvent, things::Thing, AugmentSpawn, BuildingTool,
-    BuildingToolPlugin, Buildings, CameraTracking, Destructor, Focus, Store,
+    interact_with_focus::InteractWithFocusEvent, things::Thing, AugmentSpawn, CameraTracking,
+    Destructor, Focus,
 };
 
 pub struct UserInputPlugin;
@@ -27,14 +27,11 @@ impl Plugin for UserInputPlugin {
         app.add_plugin(PickingPlugin)
             .add_plugin(InteractablePickingPlugin)
             .add_plugin(HighlightablePickingPlugin)
-            .add_plugin(BuildingToolPlugin)
             .add_plugin(EguiPlugin)
             .add_system(exit_on_esc_system)
             .add_system(make_pickable)
-            .add_system(interact_ground)
             .add_system(example_ui)
             .add_system(click_imp)
-            .add_system(click_smithery)
             .add_system(update_pedestals)
             .add_system(player_movement)
             .add_system(update_player)
@@ -335,89 +332,6 @@ fn click_imp(
     }
 }
 
-fn click_smithery(
-    models: Query<(&Parent, &Interaction), (Changed<Interaction>, With<SmitheryModel>)>,
-    mut store: Query<&mut Store>,
-    mut mage: Query<&mut Mage>,
-) {
-    for (parent, interaction) in models.iter() {
-        if let Interaction::Clicked = interaction {
-            if let Ok(store) = store.get_mut(**parent) {
-                if let Ok(mut mage) = mage.get_single_mut() {
-                    if let Some(stack) = store.first_output_stack() {
-                        if let Some(thing) = stack.thing {
-                            if stack.amount > 0.0 {
-                                mage.put_into_inventory(thing, stack.amount.min(1.0));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn interact_ground(
-    camera: Query<&PickingCamera>,
-    models: Query<(Entity, &Parent, &Interaction), With<GroundModel>>,
-    interaction_changed: Query<&Interaction, Changed<Interaction>>,
-    mut building_tool: ResMut<BuildingTool>,
-    mut keyboard_input_events: EventReader<KeyboardInput>,
-    mut build_mode: Local<bool>,
-) {
-    for event in keyboard_input_events.iter() {
-        if let Some(key_code) = event.key_code {
-            if event.state == ElementState::Pressed && key_code == KeyCode::B {
-                let building = building_tool.building.unwrap_or(Buildings::StoneBoulder);
-
-                if *build_mode {
-                    building_tool.building = Some(building.next());
-                } else {
-                    *build_mode = true;
-                    building_tool.building = Some(building);
-                }
-            }
-            if event.state == ElementState::Pressed && key_code == KeyCode::Return {
-                if *build_mode {
-                    *build_mode = false;
-                    building_tool.ghost_visible = false;
-                }
-            }
-        }
-    }
-
-    if !*build_mode {
-        return;
-    }
-
-    if let Ok(camera) = camera.get_single() {
-        for (ground_model_entity, _parent, interaction) in models.iter() {
-            let changed = interaction_changed.get(ground_model_entity).is_ok();
-
-            let round_pos = if let Some((_, intersection)) = camera.intersect_top() {
-                intersection.position().round()
-            } else {
-                Vec3::ZERO
-            };
-
-            match interaction {
-                Interaction::Clicked if changed => {
-                    building_tool.build = true;
-                    building_tool.ghost_visible = false;
-                }
-                Interaction::Hovered => {
-                    building_tool.ghost_visible = true;
-                    building_tool.placement.translation = round_pos;
-                }
-                Interaction::None if changed => {
-                    building_tool.ghost_visible = false;
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
 // #[derive(Default)]
 // struct UiState {
 //     thing: Option<Thing>,
@@ -567,7 +481,6 @@ pub struct Details<'w, 's> {
     belt: Query<'w, 's, &'static ConveyorBelt>,
     boulder: Query<'w, 's, &'static Boulder>,
     pile: Query<'w, 's, &'static Pile>,
-    fireplace: Query<'w, 's, &'static Fireplace>,
     tree: Query<'w, 's, &'static tree::Tree>,
     ritual_site: Query<'w, 's, &'static RitualSite>,
     sign: Query<'w, 's, &'static Sign>,
@@ -617,15 +530,6 @@ impl<'w, 's> Details<'w, 's> {
                     ui.label("Ⓔ stop cutting down");
                 } else {
                     ui.label("Ⓔ let cut down");
-                }
-            }
-
-            if let Ok(fireplace) = self.fireplace.get(entity) {
-                ui.label("Fireplace");
-                if fireplace.lit {
-                    ui.label("Ⓔ damp down");
-                } else {
-                    ui.label("Ⓔ light a fire");
                 }
             }
 

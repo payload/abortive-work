@@ -5,9 +5,6 @@ mod user_input;
 use bevy::prelude::Plugin;
 pub use user_input::*;
 
-mod building_tool;
-pub use building_tool::*;
-
 mod store;
 pub use store::*;
 
