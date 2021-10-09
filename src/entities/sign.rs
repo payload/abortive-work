@@ -138,10 +138,6 @@ fn update_influenced_by_signs(
             .cloned()
             .collect();
 
-        if signs.is_empty() {
-            continue;
-        }
-
         if let Some(mut boulder) = boulder {
             let mut mark = false;
 
