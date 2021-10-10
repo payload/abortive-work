@@ -34,7 +34,7 @@ impl Plugin for UserInputPlugin {
             .add_system(click_imp)
             .add_system(update_pedestals)
             .add_system(player_movement)
-            .add_system(update_player)
+            .add_system_to_stage(CoreStage::PreUpdate, update_player)
             .add_system(camera_zoom_with_mousewheel)
             .add_system(update_tree_rings)
             .insert_resource(UiState::default())
