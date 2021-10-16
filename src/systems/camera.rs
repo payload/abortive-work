@@ -1,6 +1,4 @@
-use std::f32::consts::FRAC_PI_4;
-
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{ecs::system::SystemParam, prelude::*, transform::TransformSystem};
 use bevy_mod_picking::PickingCameraBundle;
 
 pub struct CameraPlugin;
@@ -8,7 +6,10 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_system_to_stage(CoreStage::PostUpdate, camera_tracking)
-            .add_system(look_at_camera);
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                look_at_camera.after(TransformSystem::TransformPropagate),
+            );
     }
 }
 
@@ -75,15 +76,12 @@ impl<'w, 's> CameraSpawn<'w, 's> {
 pub struct LookAtCamera;
 
 fn look_at_camera(
-    mut query: Query<&mut Transform, With<LookAtCamera>>,
-    camera: Query<&Transform, (With<MyCamera>, Without<LookAtCamera>)>,
+    mut query: Query<&mut GlobalTransform, With<LookAtCamera>>,
+    camera: Query<&GlobalTransform, (With<MyCamera>, Without<LookAtCamera>)>,
 ) {
-    let camera_pos = camera.single().translation;
+    let camera_global_t = camera.single();
 
-    for mut t in query.iter_mut() {
-        let pos = t.translation;
-        let z = camera_pos.z - pos.z;
-        let y = camera_pos.y - pos.y;
-        t.rotation = Quat::from_rotation_x(z.atan2(y) + FRAC_PI_4);
+    for mut global_t in query.iter_mut() {
+        global_t.rotation = camera_global_t.rotation.inverse();
     }
 }

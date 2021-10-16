@@ -12,6 +12,7 @@ use noice::{
 };
 use systems::*;
 
+mod assets;
 mod extensions;
 
 use crate::entities::{

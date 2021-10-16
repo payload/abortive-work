@@ -1,5 +1,5 @@
 use super::{NotGround, StoreIntoPile};
-use crate::systems::*;
+use crate::{assets, systems::*};
 use bevy::{
     ecs::system::{EntityCommands, SystemParam},
     prelude::*,
@@ -87,13 +87,28 @@ impl<'w, 's> MageSpawn<'w, 's> {
             .insert(NotGround)
             .id();
 
+        let face = self
+            .cmds
+            .spawn_bundle(PbrBundle {
+                transform: Transform::from_xyz(0.0, 1.0, 0.0),
+                material: self.assets.face_material.clone(),
+                mesh: self.assets.face_mesh.clone(),
+                visible: Visible {
+                    is_transparent: true,
+                    is_visible: true,
+                },
+                ..Default::default()
+            })
+            .insert(LookAtCamera)
+            .id();
+
         let mut entity_cmds = self.cmds.spawn_bundle((
             mage,
             transform,
             GlobalTransform::identity(),
             Focus::default(),
         ));
-        entity_cmds.push_children(&[model]);
+        entity_cmds.push_children(&[model, face]);
         entity_cmds
     }
 }
@@ -103,12 +118,15 @@ pub struct MageAssets {
     pub transform: Transform,
     pub material: Handle<StandardMaterial>,
     pub mesh: Handle<Mesh>,
+    pub face_material: Handle<StandardMaterial>,
+    pub face_mesh: Handle<Mesh>,
 }
 
 fn load_assets(
     mut cmds: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    assets: Res<AssetServer>,
 ) {
     cmds.insert_resource(MageAssets {
         transform: Transform {
@@ -116,13 +134,7 @@ fn load_assets(
             rotation: Quat::from_rotation_x(0.4) * Quat::from_rotation_y(-FRAC_PI_4),
             scale: Vec3::ONE,
         },
-        material: materials.add(StandardMaterial {
-            base_color: Color::MIDNIGHT_BLUE,
-            metallic: 0.0,
-            roughness: 0.0,
-            reflectance: 0.0,
-            ..Default::default()
-        }),
+        material: materials.add(flat_material(Color::MIDNIGHT_BLUE)),
         mesh: meshes.add(
             shape::Capsule {
                 latitudes: 16,
@@ -133,6 +145,11 @@ fn load_assets(
             }
             .into(),
         ),
+        face_material: materials.add(StandardMaterial {
+            base_color_texture: Some(assets.load(assets::emojis::MAGE)),
+            ..Default::default()
+        }),
+        face_mesh: meshes.add(shape::Quad::new(Vec2::new(0.5, 0.5)).into()),
     });
 }
 

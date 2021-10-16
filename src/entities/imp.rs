@@ -4,7 +4,7 @@ use bevy::{ecs::system::SystemParam, math::vec3, prelude::*};
 use bevy_mod_picking::PickableBundle;
 use bevy_prototype_debug_lines::DebugLines;
 
-use crate::systems::*;
+use crate::{assets, systems::*};
 
 use super::{
     tree::{self, MarkCutTree},
@@ -71,6 +71,8 @@ pub struct ImpAssets {
     pub transform: Transform,
     pub material: Handle<StandardMaterial>,
     pub mesh: Handle<Mesh>,
+    pub face_material: Handle<StandardMaterial>,
+    pub face_mesh: Handle<Mesh>,
 }
 
 pub struct ImpPlugin;
@@ -94,8 +96,22 @@ pub struct ImpModel;
 
 impl<'w, 's> ImpSpawn<'w, 's> {
     pub fn spawn(&mut self, imp: Imp, transform: Transform) {
-        let model = self
-            .cmds
+        let cmds = &mut self.cmds;
+        let face = cmds
+            .spawn_bundle(PbrBundle {
+                transform: Transform::from_xyz(0.0, 1.0, 0.0),
+                mesh: self.assets.face_mesh.clone(),
+                material: self.assets.face_material.clone(),
+                visible: Visible {
+                    is_visible: true,
+                    is_transparent: true,
+                },
+                ..Default::default()
+            })
+            .insert(LookAtCamera)
+            .id();
+
+        let model = cmds
             .spawn_bundle(PbrBundle {
                 transform: self.assets.transform.clone(),
                 material: self.assets.material.clone(),
@@ -105,23 +121,28 @@ impl<'w, 's> ImpSpawn<'w, 's> {
             .insert(ImpModel)
             .insert_bundle(PickableBundle::default())
             .id();
-
-        self.cmds
-            .spawn_bundle((
-                imp,
-                transform,
-                GlobalTransform::identity(),
-                Destructable,
-                brain(),
-            ))
-            .push_children(&[model]);
+        cmds.spawn_bundle((
+            imp,
+            transform,
+            GlobalTransform::identity(),
+            Destructable,
+            brain(),
+        ))
+        .insert(Entities { model, _face: face })
+        .push_children(&[model, face]);
     }
+}
+
+struct Entities {
+    model: Entity,
+    _face: Entity,
 }
 
 fn load_assets(
     mut cmds: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    assets: ResMut<AssetServer>,
 ) {
     cmds.insert_resource(ImpAssets {
         transform: Transform {
@@ -131,6 +152,12 @@ fn load_assets(
         },
         material: materials.add(flat_material(Color::SALMON)),
         mesh: meshes.add(shape::Box::new(0.4, 0.6, 0.4).into()),
+        face_material: materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: Some(assets.load(assets::emojis::SLIGHTLY_SMILING_FACE)),
+            ..Default::default()
+        }),
+        face_mesh: meshes.add(shape::Quad::new(Vec2::new(0.5, 0.5)).into()),
     });
 }
 
@@ -273,7 +300,7 @@ fn want_to_store(
 }
 
 fn do_store(
-    mut imps: Query<(&mut Imp, &Transform)>,
+    mut imps: Query<(&mut Imp, &Transform, &Entities)>,
     mut belts: Query<(Entity, &mut ConveyorBelt, &Transform)>,
     mut query: Query<(&Actor, &mut ActionState), With<DoStore>>,
     mut cmds: Commands,
@@ -285,15 +312,15 @@ fn do_store(
     for (Actor(actor), mut state) in query.iter_mut() {
         let imp_entity = *actor;
 
-        if let Ok((mut imp, transform)) = imps.get_mut(imp_entity) {
+        if let Ok((mut imp, transform, imp_entities)) = imps.get_mut(imp_entity) {
             let imp = &mut imp;
             let pos = transform.translation;
 
-            fn init(imp: &mut Mut<Imp>, imp_entity: Entity, cmds: &mut Commands) {
+            fn init(imp: &mut Mut<Imp>, cmds: &mut Commands, model: Entity) {
                 imp.conveyor = None;
                 imp.work_time = 0.0;
                 imp.walk_destination = WalkDestination::None;
-                cmds.entity(imp_entity).remove::<FunnyAnimation>();
+                cmds.entity(model).remove::<FunnyAnimation>();
             }
 
             fn find(
@@ -317,9 +344,9 @@ fn do_store(
                 belts: &mut Query<(Entity, &mut ConveyorBelt, &Transform)>,
                 state: &mut Mut<ActionState>,
                 pos: Vec3,
-                imp_entity: Entity,
                 cmds: &mut Commands,
                 dt: f32,
+                model: Entity,
             ) {
                 let state = &mut **state;
                 if let Some((_, mut belt, transform)) =
@@ -335,8 +362,7 @@ fn do_store(
                         imp.walk_destination = WalkDestination::None;
 
                         if imp.work_time == 0.0 {
-                            cmds.entity(imp_entity)
-                                .insert(FunnyAnimation { offset: 0.0 });
+                            cmds.entity(model).insert(FunnyAnimation { offset: 0.0 });
                         }
 
                         imp.work_time += dt;
@@ -346,8 +372,8 @@ fn do_store(
                             imp.remove_thing(thing);
                             belt.put_thing(thing);
 
-                            init(imp, imp_entity, cmds);
                             *state = ActionState::Success;
+                            init(imp, cmds, model);
                         } else {
                             // not finished yet, but working
                         }
@@ -361,7 +387,7 @@ fn do_store(
 
             match *state {
                 ActionState::Init => {
-                    init(imp, imp_entity, cmds);
+                    init(imp, cmds, imp_entities.model);
                 }
                 ActionState::Requested => {
                     find(imp, pos, &mut belts);
@@ -369,7 +395,15 @@ fn do_store(
                 }
                 ActionState::Executing => {
                     //
-                    execute(imp, &mut belts, &mut state, pos, imp_entity, cmds, dt)
+                    execute(
+                        imp,
+                        &mut belts,
+                        &mut state,
+                        pos,
+                        cmds,
+                        dt,
+                        imp_entities.model,
+                    )
                 }
                 ActionState::Cancelled => {
                     *state = ActionState::Failure;
@@ -515,7 +549,7 @@ fn do_find_boulder(
 }
 
 fn do_dig(
-    mut imps: Query<&mut Imp>,
+    mut imps: Query<(&mut Imp, &Entities)>,
     boulders: Query<(Entity, &Boulder)>,
     mut query: Query<(&Actor, &mut ActionState), With<DoDig>>,
     time: Res<Time>,
@@ -523,9 +557,10 @@ fn do_dig(
 ) {
     use ActionState::*;
     for (Actor(actor), mut state) in query.iter_mut() {
-        if let Ok(mut imp) = imps.get_mut(*actor) {
+        if let Ok((mut imp, entities)) = imps.get_mut(*actor) {
             if let Requested = *state {
-                cmds.entity(*actor).insert(FunnyAnimation { offset: 0.0 });
+                cmds.entity(entities.model)
+                    .insert(FunnyAnimation { offset: 0.0 });
             }
             if let Requested | Executing = *state {
                 if let Some((_, boulder)) = imp.boulder.and_then(|entity| boulders.get(entity).ok())
@@ -553,7 +588,7 @@ fn do_dig(
             }
             if let Success | Failure = *state {
                 imp.boulder = None;
-                cmds.entity(*actor).remove::<FunnyAnimation>();
+                cmds.entity(entities.model).remove::<FunnyAnimation>();
             }
         }
     }
@@ -687,7 +722,7 @@ fn do_move_near_to(
 }
 
 fn do_cut_tree(
-    mut imps: Query<&mut Imp>,
+    mut imps: Query<(&mut Imp, &Entities)>,
     mut trees: Query<&mut tree::Tree, With<MarkCutTree>>,
     mut query: Query<(&Actor, &mut ActionState), With<DoCutTree>>,
     time: Res<Time>,
@@ -698,9 +733,9 @@ fn do_cut_tree(
             let imp = imps.get_mut(*actor).ok();
             let tree = imp
                 .as_ref()
-                .and_then(|imp| imp.tree)
+                .and_then(|(imp, _)| imp.tree)
                 .and_then(|tree| trees.get_mut(tree).ok());
-            *state = if let (Some(mut imp), Some(mut tree)) = (imp, tree) {
+            *state = if let (Some((mut imp, _entities)), Some(mut tree)) = (imp, tree) {
                 let mass = tree.cut(time.delta_seconds());
                 imp.load = Some(Thing::Wood);
                 imp.load_amount = (imp.load_amount + mass).min(1.0);
@@ -718,8 +753,8 @@ fn do_cut_tree(
             *state = ActionState::Failure;
         }
         if *state == ActionState::Failure || *state == ActionState::Success {
-            cmds.entity(*actor).remove::<FunnyAnimation>();
-            if let Ok(mut imp) = imps.get_mut(*actor) {
+            if let Ok((mut imp, entities)) = imps.get_mut(*actor) {
+                cmds.entity(entities.model).remove::<FunnyAnimation>();
                 imp.tree = None;
             }
         }
