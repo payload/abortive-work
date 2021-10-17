@@ -1,15 +1,11 @@
-use bevy::{ecs::system::SystemParam, prelude::*, transform::TransformSystem};
+use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_mod_picking::PickingCameraBundle;
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_to_stage(CoreStage::PostUpdate, camera_tracking)
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                look_at_camera.after(TransformSystem::TransformPropagate),
-            );
+        app.add_system_to_stage(CoreStage::PostUpdate, camera_tracking);
     }
 }
 
@@ -70,18 +66,5 @@ impl<'w, 's> CameraSpawn<'w, 's> {
         .insert_bundle(PickingCameraBundle::default())
         .insert(MyCamera)
         .id()
-    }
-}
-
-pub struct LookAtCamera;
-
-fn look_at_camera(
-    mut query: Query<&mut GlobalTransform, With<LookAtCamera>>,
-    camera: Query<&GlobalTransform, (With<MyCamera>, Without<LookAtCamera>)>,
-) {
-    let camera_global_t = camera.single();
-
-    for mut global_t in query.iter_mut() {
-        global_t.rotation = camera_global_t.rotation.inverse();
     }
 }

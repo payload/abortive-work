@@ -89,17 +89,18 @@ impl<'w, 's> MageSpawn<'w, 's> {
 
         let face = self
             .cmds
-            .spawn_bundle(PbrBundle {
+            .spawn_bundle(GizmoBundle {
                 transform: Transform::from_xyz(0.0, 1.0, 0.0),
-                material: self.assets.face_material.clone(),
-                mesh: self.assets.face_mesh.clone(),
-                visible: Visible {
-                    is_transparent: true,
-                    is_visible: true,
+                gizmo: Gizmo {
+                    shape: GizmoShape::Billboard {
+                        texture: Some(self.assets.face_texture.clone()),
+                        size: 0.5,
+                    },
+                    wireframe: Color::WHITE,
+                    color: Color::WHITE,
                 },
                 ..Default::default()
             })
-            .insert(LookAtCamera)
             .id();
 
         let mut entity_cmds = self.cmds.spawn_bundle((
@@ -118,8 +119,7 @@ pub struct MageAssets {
     pub transform: Transform,
     pub material: Handle<StandardMaterial>,
     pub mesh: Handle<Mesh>,
-    pub face_material: Handle<StandardMaterial>,
-    pub face_mesh: Handle<Mesh>,
+    pub face_texture: Handle<Texture>,
 }
 
 fn load_assets(
@@ -145,11 +145,7 @@ fn load_assets(
             }
             .into(),
         ),
-        face_material: materials.add(StandardMaterial {
-            base_color_texture: Some(assets.load(assets::emojis::MAGE)),
-            ..Default::default()
-        }),
-        face_mesh: meshes.add(shape::Quad::new(Vec2::new(0.5, 0.5)).into()),
+        face_texture: assets.load(assets::emojis::MAGE),
     });
 }
 

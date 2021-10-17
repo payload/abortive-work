@@ -7,20 +7,21 @@ version = "0.1.0"
 
 [dependencies]
 fastrand = "1.5"
+lyon = "0.17"
 noice = "0.7.1"
 sm = "0.9.0"
-lyon = "0.17"
 
 bevy = {git = "https://github.com/bevyengine/bevy", features = ["default", "jpeg", "bevy_dylib"]}
 bevy_egui = {git = "https://github.com/jakobhellermann/bevy_egui", branch = "bevy-main"}
+bevy_gizmos = {git = "https://github.com/payload/bevy_gizmos.git", rev = "f99cf731a035262429019b195f5de392d6f91039"}
 bevy_mod_picking = {git = "https://github.com/JulianRuiseco/bevy_mod_picking"}
-big-brain = {git = "https://github.com/payload/big-brain.git"}
 bevy_prototype_debug_lines = {git = "https://github.com/payload/bevy_debug_lines.git"}
+big-brain = {git = "https://github.com/payload/big-brain.git"}
 
 [patch.'https://github.com/bevyengine/bevy']
 #bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "5ba2b9adcf5e686273cf024acf1ad8ddfb4f8e18"}
-bevy = { path = "../bevy" }
+bevy = {path = "../bevy"}
 
 [patch.'crates-io']
 #bevy = {git = "https://github.com/bevyengine/bevy?branch=main", rev = "5ba2b9adcf5e686273cf024acf1ad8ddfb4f8e18"}
-bevy = { path = "../bevy" }
+bevy = {path = "../bevy"}

@@ -71,8 +71,7 @@ pub struct ImpAssets {
     pub transform: Transform,
     pub material: Handle<StandardMaterial>,
     pub mesh: Handle<Mesh>,
-    pub face_material: Handle<StandardMaterial>,
-    pub face_mesh: Handle<Mesh>,
+    pub face_texture: Handle<Texture>,
 }
 
 pub struct ImpPlugin;
@@ -97,18 +96,20 @@ pub struct ImpModel;
 impl<'w, 's> ImpSpawn<'w, 's> {
     pub fn spawn(&mut self, imp: Imp, transform: Transform) {
         let cmds = &mut self.cmds;
+
         let face = cmds
-            .spawn_bundle(PbrBundle {
+            .spawn_bundle(GizmoBundle {
                 transform: Transform::from_xyz(0.0, 1.0, 0.0),
-                mesh: self.assets.face_mesh.clone(),
-                material: self.assets.face_material.clone(),
-                visible: Visible {
-                    is_visible: true,
-                    is_transparent: true,
+                gizmo: Gizmo {
+                    shape: GizmoShape::Billboard {
+                        texture: Some(self.assets.face_texture.clone()),
+                        size: 0.5,
+                    },
+                    wireframe: Color::WHITE,
+                    color: Color::WHITE,
                 },
                 ..Default::default()
             })
-            .insert(LookAtCamera)
             .id();
 
         let model = cmds
@@ -152,12 +153,7 @@ fn load_assets(
         },
         material: materials.add(flat_material(Color::SALMON)),
         mesh: meshes.add(shape::Box::new(0.4, 0.6, 0.4).into()),
-        face_material: materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            base_color_texture: Some(assets.load(assets::emojis::SLIGHTLY_SMILING_FACE)),
-            ..Default::default()
-        }),
-        face_mesh: meshes.add(shape::Quad::new(Vec2::new(0.5, 0.5)).into()),
+        face_texture: assets.load(assets::emojis::SLIGHTLY_SMILING_FACE),
     });
 }
 

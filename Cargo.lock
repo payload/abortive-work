@@ -355,6 +355,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_gizmos"
+version = "0.6.0"
+source = "git+https://github.com/payload/bevy_gizmos.git?rev=f99cf731a035262429019b195f5de392d6f91039#f99cf731a035262429019b195f5de392d6f91039"
+dependencies = [
+ "bevy",
+ "crossbeam",
+ "smallvec",
+]
+
+[[package]]
 name = "bevy_gltf"
 version = "0.5.0"
 dependencies = [
@@ -1498,6 +1508,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_egui",
+ "bevy_gizmos",
  "bevy_mod_picking",
  "bevy_prototype_debug_lines",
  "big-brain",
